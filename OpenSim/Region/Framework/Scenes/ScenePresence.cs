@@ -83,6 +83,8 @@ namespace OpenSim.Region.Framework.Scenes
     public class ScenePresence : EntityBase, IScenePresence, IDisposable
     {
         private static readonly ILog m_log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+	public string HoloAppearanceCid { get; set; }
+	public string HoloAppearanceSha256 { get; set; }
 
         //~ScenePresence()
         //{
@@ -339,7 +341,7 @@ namespace OpenSim.Region.Framework.Scenes
             }
         }
 
-         public bool IsColliding
+        public bool IsColliding
         {
             get { return PhysicsActor != null && PhysicsActor.IsColliding; }
             // We would expect setting IsColliding to be private but it's used by a hack in Scene
@@ -489,7 +491,6 @@ namespace OpenSim.Region.Framework.Scenes
 //                m_log.DebugFormat("[SCENE PRESENCE]: Set appearance for {0} to {1}", Name, value);
             }
         }
-
 
         /// <summary>
         /// Copy of the script states while the agent is in transit. This state may
@@ -2187,6 +2188,21 @@ namespace OpenSim.Region.Framework.Scenes
 
                 //m_log.DebugFormat("[CompleteMovement] WaitForUpdateAgent: {0}ms", Util.EnvironmentTickCountSubtract(ts));
 
+		//get HOLO cid
+
+		AgentCircuitData acd = Scene.AuthenticateHandler.GetAgentCircuitData(UUID);
+
+		if (acd?.ServiceURLs != null)
+		{
+		    if (acd.ServiceURLs.TryGetValue("holo:appearance:cid", out var cid))
+		        HoloAppearanceCid = cid?.ToString();
+
+		    if (acd.ServiceURLs.TryGetValue("holo:appearance:sha256", out var sha))
+		        HoloAppearanceSha256 = sha?.ToString();
+
+                    m_log.DebugFormat("[CompleteMovement] HOLO CID: {0}", HoloAppearanceCid);
+		}
+
                 bool flying = ((m_AgentControlFlags & ACFlags.AGENT_CONTROL_FLY) != 0);
 
                 Vector3 look = Lookat;
@@ -2449,7 +2465,7 @@ namespace OpenSim.Region.Framework.Scenes
                 m_crossingFlags = 0;
                 m_inTransit = false;
             }
- 
+
             m_scene.EventManager.OnRegionHeartbeatEnd += RegionHeartbeatEnd;
 
             m_log.DebugFormat("[CompleteMovement] end: {0}ms", Util.EnvironmentTickCountSubtract(ts));
@@ -4123,6 +4139,8 @@ namespace OpenSim.Region.Framework.Scenes
                 if (!IsChildAgent)
                 {
                     // Create child agents in neighbouring regions
+		    if (this.IsChildAgent)
+		            return;
                     IEntityTransferModule m_agentTransfer = m_scene.RequestModuleInterface<IEntityTransferModule>();
                     m_agentTransfer?.EnableChildAgents(this);
 
@@ -4136,6 +4154,17 @@ namespace OpenSim.Region.Framework.Scenes
                     m_childUpdatesBusy = false; // allow them
                 }
             });
+
+            // HOLO Rehydration
+            if (!string.IsNullOrEmpty(HoloAppearanceCid))
+            {
+                Util.FireAndForget(_ =>
+                {
+                    Thread.Sleep(1000);
+            
+                    HoloAppearanceRehydrator.TryRehydrateAfterTeleport(this);
+                });
+            }
 
         }
 

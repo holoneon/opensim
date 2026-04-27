@@ -59,6 +59,8 @@ namespace OpenSim.Region.Framework.Scenes
 
         public delegate void SynchronizeSceneHandler(Scene scene);
 
+	public string HoloAppearanceCid { get; set; }
+	public string HoloAppearanceSha256 { get; set; }
 
         #region Fields
 
@@ -812,6 +814,8 @@ namespace OpenSim.Region.Framework.Scenes
             };
 
             m_asyncInventorySender = new AsyncInventorySender(this);
+
+	    HoloAppearanceStore.Configure(m_config);
 
             #region Region Settings
 
@@ -4197,6 +4201,20 @@ namespace OpenSim.Region.Framework.Scenes
                 }
 
                 m_authenticateHandler.AddNewCircuit(acd);
+
+                // === HOLO: Extract appearance pointer and persist into circuit ===
+                if (acd.ServiceURLs != null)
+                {
+                    if (acd.ServiceURLs.TryGetValue("holo:appearance:cid", out var cid))
+                    {
+			HoloAppearanceCid = cid?.ToString();
+                    }
+                
+                    if (acd.ServiceURLs.TryGetValue("holo:appearance:sha256", out var sha))
+                    {
+			HoloAppearanceSha256 = sha?.ToString();
+                    }
+                }
 
                 if (sp is null) // We don't have an [child] agent here already
                 {

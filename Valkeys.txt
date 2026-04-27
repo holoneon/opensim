@@ -1,0 +1,16 @@
+mkdir -p /opt/bakes
+tmpfs /opt/bakes tmpfs rw,size=2G,noatime 0 0
+
+OpenSim.ini
+
+[HoloAppearance]
+Enabled = true
+
+LocalValkeyHost = 127.0.0.1
+LocalValkeyPort = 6379
+
+TTLSeconds = 7200
+
+;Peers = 10.99.0.1:6379,10.99.0.2:6379,10.99.0.42:6379
+
+
