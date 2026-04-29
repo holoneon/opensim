@@ -1,0 +1,13 @@
+Add to Robust.HG.ini under [LoginService]
+
+    ;ADDED for HOLO - create account on login if does not exist
+    AutoCreateAccounts = true
+    AutoCreateRequireViewerFingerprint = true
+    AutoCreateMaxPerFingerprintPerDay = 2
+    AutoCreateMaxPerIPPerHour = 3
+    AutoCreateDefaultUserLevel = 0
+    AutoCreateDefaultUserFlags = 0
+    AutoCreateConnectionString = ""
+    AutoCreateHashSecret = "Add a hash secret here";
+    AutoCreateDefaultAvatarModel = "Ruth Avatar"
+
