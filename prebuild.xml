@@ -847,6 +847,7 @@
       <Reference name="OpenMetaverse.StructuredData"/>
       <Reference name="Nini"/>
       <Reference name="log4net"/>
+      <Reference name="MySql.Data"/>
 
       <Files>
         <Match pattern="*.cs" recurse="true">

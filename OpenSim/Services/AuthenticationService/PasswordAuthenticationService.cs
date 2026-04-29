@@ -72,7 +72,7 @@ namespace OpenSim.Services.AuthenticationService
         {
             realID = UUID.Zero;
 
-            m_log.DebugFormat("[AUTH SERVICE]: Authenticating for {0}, user account service present: {1}", principalID, m_UserAccountService != null);
+            m_log.DebugFormat("[AUTH SERVICE]: Authenticating for {0}, using {1} user account service present: {2}", principalID, password, m_UserAccountService != null);
             AuthenticationData data = m_Database.Get(principalID);
             UserAccount user = null;
             if (m_UserAccountService != null)
@@ -87,13 +87,17 @@ namespace OpenSim.Services.AuthenticationService
             if (!data.Data.ContainsKey("passwordHash") ||
                 !data.Data.ContainsKey("passwordSalt"))
             {
+		m_log.Debug("[AUTH SERVICE]: No hash or salt found in data!");
                 return String.Empty;
             }
+
+	    m_log.DebugFormat("[PASS AUTH]: retrieved hash: {0} salt: {1}",data.Data["passwordHash"].ToString(),
+				data.Data["passwordSalt"].ToString());
 
             string hashed = Util.Md5Hash(password + ":" +
                     data.Data["passwordSalt"].ToString());
 
-//            m_log.DebugFormat("[PASS AUTH]: got {0}; hashed = {1}; stored = {2}", password, hashed, data.Data["passwordHash"].ToString());
+            m_log.DebugFormat("[PASS AUTH]: got {0}; hashed = {1}; stored = {2}", password, hashed, data.Data["passwordHash"].ToString());
 
             if (data.Data["passwordHash"].ToString() == hashed)
             {

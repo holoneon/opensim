@@ -289,7 +289,6 @@ namespace OpenSim.Services.Connectors
             return accounts;
         }
 
-
         public void InvalidateCache(UUID userID)
         {
         }
@@ -357,7 +356,7 @@ namespace OpenSim.Services.Connectors
             string reply = string.Empty;
             string reqString = ServerUtils.BuildQueryString(sendData);
             string uri = m_ServerURI + "/accounts";
-            // m_log.DebugFormat("[ACCOUNTS CONNECTOR]: queryString = {0}", reqString);
+            m_log.DebugFormat("[ACCOUNTS CONNECTOR]: queryString = {0}", reqString);
             try
             {
                 reply = SynchronousRestFormsRequester.MakeRequest("POST",

@@ -58,12 +58,20 @@ namespace OpenSim.Services.LLLoginService
         public static LLFailedLoginResponse UnverifiedAccountProblem;
         public static LLFailedLoginResponse AlreadyLoggedInProblem;
         public static LLFailedLoginResponse InternalError;
+	public static LLFailedLoginResponse PasswordProblem;
+	public static LLFailedLoginResponse GateProblem;
 
         static LLFailedLoginResponse()
         {
             UserProblem = new LLFailedLoginResponse("key",
                 "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
                 "false");
+	    PasswordProblem = new LLFailedLoginResponse("key",
+		"Could not create a new account. Your password is invalid. Please use a password that is at least 8 characters.",
+		"false");
+	    GateProblem = new LLFailedLoginResponse("key",
+		"Could not create a new account. You have reached the limit. Please wait awhile and try again later.",
+		"false");
             GridProblem = new LLFailedLoginResponse("key",
                 "Error connecting to the desired location. Try connecting to another region.",
                 "false");

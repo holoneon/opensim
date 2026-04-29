@@ -32,6 +32,9 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
+using System.Text;
+using MySql.Data.MySqlClient;
 
 using log4net;
 using Nini.Config;
@@ -91,6 +94,17 @@ namespace OpenSim.Services.LLLoginService
         protected string m_MessageUrl;
         protected string m_DSTZone;
 
+	//added for HOLO auto account creation
+        protected bool m_AutoCreateAccounts;
+        protected bool m_AutoCreateRequireViewerFingerprint;
+        protected int m_AutoCreateMaxPerFingerprintPerDay;
+        protected int m_AutoCreateMaxPerIPPerHour;
+        protected int m_AutoCreateDefaultUserLevel;
+        protected int m_AutoCreateDefaultUserFlags;
+        protected string m_AutoCreateHashSecret;
+        protected string m_AutoCreateConnectionString;
+        protected string m_AutoCreateDefaultAvatarModel;
+
         protected bool m_allowDuplicatePresences = false;
         protected string m_messageKey;
         protected bool m_allowLoginFallbackToAnyRegion = true;  // if login requested region if not found and there are no Default or fallback regions,
@@ -131,6 +145,18 @@ namespace OpenSim.Services.LLLoginService
             m_ClassifiedFee = m_LoginServerConfig.GetString("ClassifiedFee", string.Empty);
             m_DestinationGuide = m_LoginServerConfig.GetString ("DestinationGuide", string.Empty);
             m_AvatarPicker = m_LoginServerConfig.GetString("AvatarPicker", string.Empty);
+
+	    //Added for HOLO autocreate accounts
+            m_AutoCreateAccounts = m_LoginServerConfig.GetBoolean("AutoCreateAccounts", false);
+            m_AutoCreateRequireViewerFingerprint = m_LoginServerConfig.GetBoolean("AutoCreateRequireViewerFingerprint", false);
+            m_AutoCreateMaxPerFingerprintPerDay = m_LoginServerConfig.GetInt("AutoCreateMaxPerFingerprintPerDay", 2);
+            m_AutoCreateMaxPerIPPerHour = m_LoginServerConfig.GetInt("AutoCreateMaxPerIPPerHour", 3);
+            m_AutoCreateDefaultUserLevel = m_LoginServerConfig.GetInt("AutoCreateDefaultUserLevel", 0);
+            m_AutoCreateDefaultUserFlags = m_LoginServerConfig.GetInt("AutoCreateDefaultUserFlags", 0);
+            m_AutoCreateHashSecret = m_LoginServerConfig.GetString("AutoCreateHashSecret", "CHANGE-ME");
+            m_AutoCreateConnectionString = m_LoginServerConfig.GetString("AutoCreateConnectionString", string.Empty);
+            m_AutoCreateDefaultAvatarModel = 
+		m_LoginServerConfig.GetString("AutoCreateDefaultAvatarModel", string.Empty); //set this or you become an Orange Cloud!
 
             m_allowLoginFallbackToAnyRegion = m_LoginServerConfig.GetBoolean("AllowLoginFallbackToAnyRegion", m_allowLoginFallbackToAnyRegion);
 
@@ -422,9 +448,79 @@ namespace OpenSim.Services.LLLoginService
                 UserAccount account = m_UserAccountService.GetUserAccount(scopeID, firstName, lastName);
                 if (account is null)
                 {
+		    // create new user
+/*
                     m_log.InfoFormat(
                         "[LLOGIN SERVICE]: Login failed for {0} {1}, reason: user not found", firstName, lastName);
                     return LLFailedLoginResponse.UserProblem;
+*/
+
+		    //For HOLO: if user account does not exist, create it. This allows an easy way for users to create new grid accounts.
+
+		    m_log.DebugFormat("[LLOGIN SERVICE]: the password sent by client: {0}",passwd);
+
+                    if (!m_AutoCreateAccounts)
+                    {
+                        m_log.InfoFormat(
+                            "[LLOGIN SERVICE]: Login failed for {0} {1}, reason: user not found",
+                            firstName, lastName);
+                
+                        return LLFailedLoginResponse.UserProblem;
+                    }
+                
+		    string gateReason;
+
+		    string clientIPAddress = clientIP != null && clientIP.Address != null
+	                ? clientIP.Address.ToString()
+                        : string.Empty;
+
+                    if (!AutoCreateGateAllows(firstName, lastName, clientVersion, channel, mac, id0, clientIPAddress, out gateReason))
+                    {
+                        m_log.InfoFormat(
+                            "[LLOGIN SERVICE]: Auto-create failed for {0} {1}, reason: gate limited - {2}",
+                            firstName, lastName, gateReason);
+                
+                        return LLFailedLoginResponse.GateProblem;
+                    }
+
+                    account = AutoCreateUserViaPlugin(
+                        firstName,
+                        lastName,
+                        passwd,
+                        string.Empty,
+                        scopeID);
+
+                    if (account is null)
+                    {
+                        m_log.WarnFormat(
+                            "[LLOGIN SERVICE]: Auto-create failed for {0} {1}, reason: CreateUser returned null",
+                            firstName, lastName);
+                
+                        return LLFailedLoginResponse.UserProblem;
+                    }
+                
+                    // Re-read from the DB/service so the rest of login sees canonical account data.
+                    account = m_UserAccountService.GetUserAccount(scopeID, firstName, lastName);
+                
+                    if (account is null)
+                    {
+                        m_log.ErrorFormat(
+                            "[LLOGIN SERVICE]: Auto-create created {0} {1}, but account could not be reloaded",
+                            firstName, lastName);
+                
+                        return LLFailedLoginResponse.InternalError;
+                    }
+
+		    // Now set correct password
+                    if (!SetViewerPasswordHashDirect(account.PrincipalID, passwd, out string passwordReason))
+                    {
+                        m_log.ErrorFormat(
+                            "[LLOGIN SERVICE]: Auto-create failed for {0} {1}, could not set auth password: {2}",
+                            firstName, lastName, passwordReason);
+                    
+                        return LLFailedLoginResponse.InternalError;
+                    }
+
                 }
 
                 if (account.UserLevel < m_MinLoginLevel)
@@ -1218,6 +1314,431 @@ namespace OpenSim.Services.LLLoginService
                 UUID.Zero, guinfo.LastRegionID, guinfo.LastPosition, guinfo.LastLookAt);
 
             return true;
+        }
+
+
+        private bool IsAutoCreateBlocked(
+            MySqlConnection conn,
+            string clientIP,
+            string id0Hash,
+            string macHash,
+            string fingerprintHash,
+            out string reason)
+        {
+            reason = string.Empty;
+        
+            const string sql = @"
+                SELECT reason
+                FROM holo_autocreate_blocks
+                WHERE
+                    (expires_at IS NULL OR expires_at > UTC_TIMESTAMP())
+                    AND (
+                        (ip_address IS NOT NULL AND ip_address = @ip_address)
+                        OR (id0_hash IS NOT NULL AND id0_hash = @id0_hash)
+                        OR (mac_hash IS NOT NULL AND mac_hash = @mac_hash)
+                        OR (fingerprint_hash IS NOT NULL AND fingerprint_hash = @fingerprint_hash)
+                    )
+                ORDER BY created_at DESC
+                LIMIT 1;
+            ";
+        
+            using (MySqlCommand cmd = new MySqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@ip_address",
+                    string.IsNullOrWhiteSpace(clientIP) ? (object)DBNull.Value : clientIP);
+        
+                cmd.Parameters.AddWithValue("@id0_hash",
+                    string.IsNullOrWhiteSpace(id0Hash) ? (object)DBNull.Value : id0Hash);
+        
+                cmd.Parameters.AddWithValue("@mac_hash",
+                    string.IsNullOrWhiteSpace(macHash) ? (object)DBNull.Value : macHash);
+        
+                cmd.Parameters.AddWithValue("@fingerprint_hash",
+                    string.IsNullOrWhiteSpace(fingerprintHash) ? (object)DBNull.Value : fingerprintHash);
+        
+                object result = cmd.ExecuteScalar();
+        
+                if (result != null && result != DBNull.Value)
+                {
+                    reason = "blocked: " + result.ToString();
+                    return true;
+                }
+            }
+        
+            return false;
+        }
+        
+        private int CountRecentAutoCreatesByIP(
+            MySqlConnection conn,
+            string clientIP,
+            int hours)
+        {
+            if (string.IsNullOrWhiteSpace(clientIP))
+                return 0;
+        
+            const string sql = @"
+                SELECT COUNT(*)
+                FROM holo_account_autocreate_log
+                WHERE
+                    success = 1
+                    AND ip_address = @ip_address
+                    AND created_at >= UTC_TIMESTAMP() - INTERVAL @hours HOUR;
+            ";
+        
+            using (MySqlCommand cmd = new MySqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@ip_address", clientIP);
+                cmd.Parameters.AddWithValue("@hours", hours);
+        
+                object result = cmd.ExecuteScalar();
+        
+                if (result == null || result == DBNull.Value)
+                    return 0;
+        
+                return Convert.ToInt32(result);
+            }
+        }
+        
+        private int CountRecentAutoCreatesByFingerprint(
+            MySqlConnection conn,
+            string fingerprintHash,
+            int hours)
+        {
+            if (string.IsNullOrWhiteSpace(fingerprintHash))
+                return 0;
+        
+            const string sql = @"
+                SELECT COUNT(*)
+                FROM holo_account_autocreate_log
+                WHERE
+                    success = 1
+                    AND fingerprint_hash = @fingerprint_hash
+                    AND created_at >= UTC_TIMESTAMP() - INTERVAL @hours HOUR;
+            ";
+        
+            using (MySqlCommand cmd = new MySqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@fingerprint_hash", fingerprintHash);
+                cmd.Parameters.AddWithValue("@hours", hours);
+        
+                object result = cmd.ExecuteScalar();
+        
+                if (result == null || result == DBNull.Value)
+                    return 0;
+        
+                return Convert.ToInt32(result);
+            }
+        }
+        
+
+        private string HoloHmacSha256(string value)
+        {
+            if (value == null)
+                value = string.Empty;
+        
+            byte[] keyBytes = Encoding.UTF8.GetBytes(m_AutoCreateHashSecret ?? string.Empty);
+            byte[] valueBytes = Encoding.UTF8.GetBytes(value);
+        
+            using (HMACSHA256 hmac = new HMACSHA256(keyBytes))
+            {
+                byte[] hash = hmac.ComputeHash(valueBytes);
+        
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+        
+                foreach (byte b in hash)
+                    sb.Append(b.ToString("x2"));
+        
+                return sb.ToString();
+            }
+        }
+
+	// OpenSim CreateUser functions arent meant to be used by the viewer, 
+	// in order to get the password set correctly we need to do it manually
+	// because the viewer pre-hashes the password
+
+        private bool SetViewerPasswordHashDirect(UUID principalID, string passwd, out string reason)
+        {
+            reason = string.Empty;
+        
+            if (string.IsNullOrEmpty(passwd))
+            {
+                reason = "empty password";
+                return false;
+            }
+        
+            string viewerHash = passwd;
+        
+            if (viewerHash.StartsWith("$1$"))
+                viewerHash = viewerHash.Remove(0, 3);
+            else
+                viewerHash = Util.Md5Hash(viewerHash);
+        
+            viewerHash = viewerHash.ToLowerInvariant();
+        
+            if (viewerHash.Length != 32)
+            {
+                reason = "invalid viewer password hash length";
+                return false;
+            }
+        
+            foreach (char c in viewerHash)
+            {
+                bool isHex =
+                    (c >= '0' && c <= '9') ||
+                    (c >= 'a' && c <= 'f');
+        
+                if (!isHex)
+                {
+                    reason = "invalid viewer password hash";
+                    return false;
+                }
+            }
+        
+            string passwordSalt = Util.Md5Hash(UUID.Random().ToString());
+            string passwordHash = Util.Md5Hash(viewerHash + ":" + passwordSalt);
+        
+            const string sql = @"
+                UPDATE auth
+                SET
+                    passwordHash = @passwordHash,
+                    passwordSalt = @passwordSalt,
+                    webLoginKey = @webLoginKey,
+                    accountType = @accountType
+                WHERE UUID = @uuid;
+            ";
+        
+            try
+            {
+                using (MySqlConnection conn = new MySqlConnection(m_AutoCreateConnectionString))
+                {
+                    conn.Open();
+        
+                    using (MySqlCommand cmd = new MySqlCommand(sql, conn))
+                    {
+                        cmd.Parameters.AddWithValue("@uuid", principalID.ToString());
+                        cmd.Parameters.AddWithValue("@passwordHash", passwordHash);
+                        cmd.Parameters.AddWithValue("@passwordSalt", passwordSalt);
+                        cmd.Parameters.AddWithValue("@webLoginKey", UUID.Zero.ToString());
+                        cmd.Parameters.AddWithValue("@accountType", "UserAccount");
+        
+                        int rows = cmd.ExecuteNonQuery();
+        
+                        if (rows < 1)
+                        {
+                            reason = "auth row not found";
+                            return false;
+                        }
+                    }
+                }
+        
+                return true;
+            }
+            catch (Exception e)
+            {
+                reason = e.Message;
+        
+                m_log.ErrorFormat(
+                    "[LLOGIN SERVICE]: Failed to set viewer password hash for {0}: {1}",
+                    principalID,
+                    e);
+        
+                return false;
+            }
+        }
+
+
+        private UserAccount AutoCreateUserViaPlugin(
+            string firstName,
+            string lastName,
+            string password,
+            string email,
+            UUID scopeID)
+        {
+            try
+            {
+                Type serviceType = m_UserAccountService.GetType();
+		if (password.StartsWith("$1$"))
+			password = password.Remove(0, 3);
+
+                // Local UserAccountService signature:
+                // CreateUser(UUID scopeID, UUID principalID, string firstName,
+                //            string lastName, string password, string email, string model = "")
+                System.Reflection.MethodInfo localCreateUserMethod = serviceType.GetMethod(
+                    "CreateUser",
+                    new Type[]
+                    {
+                        typeof(UUID),
+                        typeof(UUID),
+                        typeof(string),
+                        typeof(string),
+                        typeof(string),
+                        typeof(string),
+                        typeof(string)
+                    });
+        
+                if (localCreateUserMethod != null)
+                {
+                    object result = localCreateUserMethod.Invoke(
+                        m_UserAccountService,
+                        new object[]
+                        {
+                            scopeID,
+                            UUID.Random(),
+                            firstName,
+                            lastName,
+                            password, // replace this because it's already hashed - after return
+                            email,
+                            m_AutoCreateDefaultAvatarModel
+                        });
+        
+                    return result as UserAccount;
+                }
+
+                // Remote connector signature:
+                // CreateUser(string first, string last, string password, string email, UUID scopeID)
+                System.Reflection.MethodInfo connectorCreateUserMethod = serviceType.GetMethod(
+                    "CreateUser",
+                    new Type[]
+                    {
+                        typeof(string),
+                        typeof(string),
+                        typeof(string),
+                        typeof(string),
+                        typeof(UUID)
+                    });
+        
+                if (connectorCreateUserMethod != null)
+                {
+                    object result = connectorCreateUserMethod.Invoke(
+                        m_UserAccountService,
+                        new object[]
+                        {
+                            firstName,
+                            lastName,
+                            password, // replace this because it's already hashed - after return
+                            email,
+                            scopeID
+                        });
+
+			//TODO set model :)
+
+                    return result as UserAccount;
+                }
+        
+                m_log.ErrorFormat(
+                    "[LLOGIN SERVICE]: Auto-create failed, loaded user account service {0} has no compatible CreateUser method",
+                    serviceType.FullName);
+        
+                return null;
+            }
+            catch (Exception e)
+            {
+                m_log.ErrorFormat(
+                    "[LLOGIN SERVICE]: Auto-create exception for {0} {1}: {2}",
+                    firstName,
+                    lastName,
+                    e);
+        
+                return null;
+            }
+        }
+
+        private bool AutoCreateGateAllows(
+            string firstName,
+            string lastName,
+            string clientVersion,
+            string channel,
+            string mac,
+            string id0,
+            string clientIP,
+            out string reason)
+        {
+            reason = string.Empty;
+        
+            if (!m_AutoCreateAccounts)
+            {
+                reason = "auto-create disabled";
+                return false;
+            }
+        
+            if (string.IsNullOrWhiteSpace(m_AutoCreateConnectionString))
+            {
+                reason = "auto-create connection string missing";
+                return false;
+            }
+        
+            bool hasId0 = !string.IsNullOrWhiteSpace(id0);
+            bool hasMac = !string.IsNullOrWhiteSpace(mac);
+            bool hasFingerprint = hasId0 || hasMac;
+        
+            if (m_AutoCreateRequireViewerFingerprint && !hasFingerprint)
+            {
+                reason = "viewer fingerprint required";
+                return false;
+            }
+        
+            string id0Hash = hasId0 ? HoloHmacSha256(id0.Trim()) : null;
+            string macHash = hasMac ? HoloHmacSha256(mac.Trim()) : null;
+        
+            string fingerprintSource = string.Format("{0}:{1}",
+                hasId0 ? id0.Trim() : "",
+                hasMac ? mac.Trim() : "");
+        
+            string fingerprintHash = hasFingerprint ? HoloHmacSha256(fingerprintSource) : null;
+        
+            try
+            {
+                using (MySqlConnection conn = new MySqlConnection(m_AutoCreateConnectionString))
+                {
+                    conn.Open();
+        
+                    if (IsAutoCreateBlocked(conn, clientIP, id0Hash, macHash, fingerprintHash, out reason))
+                        return false;
+        
+                    if (!string.IsNullOrWhiteSpace(clientIP) && m_AutoCreateMaxPerIPPerHour > 0)
+                    {
+                        int ipCount = CountRecentAutoCreatesByIP(conn, clientIP, 1);
+        
+                        if (ipCount >= m_AutoCreateMaxPerIPPerHour)
+                        {
+                            reason = string.Format(
+                                "ip hourly limit reached: {0}/{1}",
+                                ipCount,
+                                m_AutoCreateMaxPerIPPerHour);
+        
+                            return false;
+                        }
+                    }
+        
+                    if (!string.IsNullOrWhiteSpace(fingerprintHash) && m_AutoCreateMaxPerFingerprintPerDay > 0)
+                    {
+                        int fpCount = CountRecentAutoCreatesByFingerprint(conn, fingerprintHash, 24);
+        
+                        if (fpCount >= m_AutoCreateMaxPerFingerprintPerDay)
+                        {
+                            reason = string.Format(
+                                "fingerprint daily limit reached: {0}/{1}",
+                                fpCount,
+                                m_AutoCreateMaxPerFingerprintPerDay);
+        
+                            return false;
+                        }
+                    }
+                }
+        
+                return true;
+            }
+            catch (Exception e)
+            {
+                m_log.ErrorFormat(
+                    "[LLOGIN SERVICE]: Auto-create gate check failed for {0} {1}: {2}",
+                    firstName,
+                    lastName,
+                    e.Message);
+        
+                reason = "gate check error";
+                return false;
+            }
         }
     }
 
