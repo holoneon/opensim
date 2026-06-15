@@ -1,0 +1,15 @@
+[HoloneonOarControl]
+Enabled = true
+CommandChannel = 77
+
+; Your grid-owner override UUID
+AdminUUID = 00000000-0000-0000-0000-000000000000
+
+BaseUrl = https://control.holoneon.com/oar
+TokenSecret = change-this-to-a-long-random-string
+TokenMinutes = 30
+
+OarDirectory = /var/lib/holoneon/oars
+AllowRenterExport = true
+AllowRenterImport = false
+

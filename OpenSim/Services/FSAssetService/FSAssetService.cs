@@ -55,24 +55,41 @@ namespace OpenSim.Services.FSAssetService
 
         private string UploadToIpfsMaster(byte[] data)
         {
-            using (var content = new MultipartFormDataContent())
+            if (data == null || data.Length == 0)
             {
-                var fileContent = new ByteArrayContent(data);
-                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/octet-stream");
-                // IPFS expects the part name to be "path" or "file"
-                content.Add(fileContent, "file", "asset");
+                m_log.Warn("[FSASSETS]: Refusing to upload empty asset data to IPFS");
+                return string.Empty;
+            }
 
-                // Force CIDv1 and RawLeaves via QueryString
-                var response = m_IpfsClient.PostAsync("api/v0/add?cid-version=1&raw-leaves=true", content).Result;
-        
-                if (response.IsSuccessStatusCode)
+            try
+            {
+                using (var content = new MultipartFormDataContent())
                 {
+                    var fileContent = new ByteArrayContent(data);
+                    fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/octet-stream");
+                    // IPFS expects the part name to be "path" or "file".
+                    content.Add(fileContent, "file", "asset");
+
+                    // Force CIDv1 and RawLeaves via QueryString.
+                    var response = m_IpfsClient.PostAsync("api/v0/add?cid-version=1&raw-leaves=true", content).Result;
                     string result = response.Content.ReadAsStringAsync().Result;
-            // json OpenMetaverse.StructuredData
-            // to grab the "Hash" field from the response.
-                    return ParseCidFromJson(result);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string cid = ParseCidFromJson(result);
+                        if (string.IsNullOrEmpty(cid))
+                            m_log.ErrorFormat("[FSASSETS]: IPFS add succeeded but no CID was parsed. Response: {0}", result);
+                        return cid;
+                    }
+
+                    m_log.ErrorFormat("[FSASSETS]: IPFS add failed with HTTP {0}: {1}", response.StatusCode, result);
                 }
             }
+            catch (Exception e)
+            {
+                m_log.ErrorFormat("[FSASSETS]: IPFS add threw exception: {0}", e);
+            }
+
             return string.Empty;
         }
 
@@ -518,51 +535,98 @@ namespace OpenSim.Services.FSAssetService
         private void Writer()
         {
             string spoolSubDir = Path.Combine(m_SpoolDirectory, "spool");
+            Directory.CreateDirectory(spoolSubDir);
         
             while (true)
             {
-                // We look for .meta files because they represent a complete pair
+                // We look for .meta files because they are written after the matching .asset file.
                 string[] metaFiles = Directory.GetFiles(spoolSubDir, "*.meta");
         
                 foreach (string metaPath in metaFiles)
                 {
-                    try {
+                    try
+                    {
                         string assetId = Path.GetFileNameWithoutExtension(metaPath);
                         string assetPath = Path.Combine(spoolSubDir, assetId + ".asset");
 
-                        if (File.Exists(assetPath)) 
+                        if (!File.Exists(assetPath))
                         {
-                            // Read Data and Metadata (OSD)
-                            byte[] data = File.ReadAllBytes(assetPath);
-                            OSDMap metaMap = (OSDMap)OSDParser.DeserializeJson(File.ReadAllText(metaPath));
-                        
-                            // REHYDRATE: Turn the OSDMap back into an AssetMetadata object
-                            AssetMetadata metadata = new AssetMetadata();
-                            metadata.ID = metaMap["ID"].AsString();
-                            metadata.FullID = metaMap["ID"].AsUUID();
-                            metadata.Type = (sbyte)metaMap["Type"].AsInteger();
-                            metadata.Flags = (AssetFlags)metaMap["Flags"].AsInteger();
-                            // Use Defaults for Name/Desc if they aren't in your spool map
-                            metadata.Name = metaMap.ContainsKey("Name") ? metaMap["Name"].AsString() : string.Empty;
-                            metadata.Description = metaMap.ContainsKey("Description") ? metaMap["Description"].AsString() : string.Empty;
-                        
-                            // Upload to IPFS Master (10.99.0.10)
-                            string cid = UploadToIpfsMaster(data);
-                        
-                            if (!string.IsNullOrEmpty(cid)) 
-                            {
-                                // 4. NOW pass the 'metadata' object, not the 'metaMap'
-                                // We also pull the legacy Hash from the map for the second argument
-                                m_DataConnector.Store(metadata, metaMap["Hash"].AsString(), cid);
-                        
-                                // 5. Cleanup RAM disk
-                                File.Delete(assetPath);
-                                File.Delete(metaPath);
-                            }
+                            m_log.WarnFormat("[FSASSETS]: Metadata exists without asset payload yet: {0}", metaPath);
+                            continue;
                         }
+
+                        byte[] data = File.ReadAllBytes(assetPath);
+                        OSD osd = OSDParser.DeserializeJson(File.ReadAllText(metaPath));
+
+                        if (!(osd is OSDMap metaMap))
+                        {
+                            m_log.ErrorFormat("[FSASSETS]: Invalid metadata JSON for {0}", metaPath);
+                            continue;
+                        }
+
+                        if (!metaMap.ContainsKey("ID") || !metaMap.ContainsKey("Type") || !metaMap.ContainsKey("Hash"))
+                        {
+                            m_log.ErrorFormat("[FSASSETS]: Metadata missing required fields for {0}", metaPath);
+                            continue;
+                        }
+
+                        AssetMetadata metadata = new AssetMetadata();
+                        metadata.ID = metaMap["ID"].AsString();
+                        metadata.FullID = metaMap["ID"].AsUUID();
+                        metadata.Type = (sbyte)metaMap["Type"].AsInteger();
+                        metadata.Flags = metaMap.ContainsKey("Flags")
+                            ? (AssetFlags)metaMap["Flags"].AsInteger()
+                            : AssetFlags.Normal;
+                        metadata.Name = metaMap.ContainsKey("Name") ? metaMap["Name"].AsString() : string.Empty;
+                        metadata.Description = metaMap.ContainsKey("Description") ? metaMap["Description"].AsString() : string.Empty;
+                        metadata.ContentType = metaMap.ContainsKey("ContentType")
+                            ? metaMap["ContentType"].AsString()
+                            : SLUtil.SLAssetTypeToContentType(metadata.Type);
+
+                        string hash = metaMap["Hash"].AsString();
+
+                        m_log.InfoFormat(
+                            "[FSASSETS]: Writer processing asset {0}, type={1}, nameLen={2}, descLen={3}, dataLen={4}, hash={5}",
+                            metadata.ID,
+                            metadata.Type,
+                            metadata.Name == null ? -1 : metadata.Name.Length,
+                            metadata.Description == null ? -1 : metadata.Description.Length,
+                            data == null ? -1 : data.Length,
+                            hash);
+
+                        string cid = UploadToIpfsMaster(data);
         
-                    } catch (Exception e) {
-                        m_log.ErrorFormat("[FSASSETS]: Writer failed for {0}: {1}", metaPath, e.Message);
+                        if (string.IsNullOrEmpty(cid))
+                        {
+                            m_log.ErrorFormat("[FSASSETS]: IPFS upload failed for asset {0}; leaving spool files for retry", metadata.ID);
+                            continue;
+                        }
+
+                        // Store metadata only after the IPFS add succeeds.
+                        m_DataConnector.Store(metadata, hash, cid);
+
+                        // Verify the DB row/CID before deleting the only local queued copy.
+                        string storedCid = m_DataConnector.GetCid(metadata.ID);
+                        if (string.IsNullOrEmpty(storedCid))
+                        {
+                            m_log.ErrorFormat("[FSASSETS]: DB store did not create CID row for asset {0}; leaving spool files for retry", metadata.ID);
+                            continue;
+                        }
+
+                        if (storedCid != cid)
+                        {
+                            m_log.WarnFormat("[FSASSETS]: Stored CID mismatch for asset {0}. Expected {1}, got {2}", metadata.ID, cid, storedCid);
+                        }
+
+                        File.Delete(assetPath);
+                        File.Delete(metaPath);
+
+                        m_log.InfoFormat("[FSASSETS]: Stored asset {0} in IPFS CID {1}", metadata.ID, cid);
+        
+                    }
+                    catch (Exception e)
+                    {
+                        m_log.ErrorFormat("[FSASSETS]: Writer failed for {0}: {1}", metaPath, e);
                     }
                 }
                 Thread.Sleep(m_WriteSleepMs);
@@ -578,29 +642,112 @@ namespace OpenSim.Services.FSAssetService
   
         private string Store(AssetBase asset, bool force)
         {
+            if (asset == null || asset.Data == null)
+            {
+                m_log.Error("[FSASSETS]: Refusing to store null asset or null asset data");
+                return UUID.Zero.ToString();
+            }
+
+            // Preserve the original FSAssetService ID handling.
+            if (string.IsNullOrEmpty(asset.ID))
+            {
+                if (asset.FullID.IsZero())
+                    asset.FullID = UUID.Random();
+
+                asset.ID = asset.FullID.ToString();
+            }
+            else if (asset.FullID.IsZero())
+            {
+                UUID uuid = UUID.Zero;
+                if (UUID.TryParse(asset.ID, out uuid))
+                {
+                    asset.FullID = uuid;
+                }
+                else
+                {
+                    asset.FullID = UUID.Random();
+                    asset.ID = asset.FullID.ToString();
+                }
+            }
+
+            if (asset.Name == null)
+                asset.Name = string.Empty;
+
+            if (asset.Description == null)
+                asset.Description = string.Empty;
+
+            // Preserve the original FSAssetService field length checks.
+            if (asset.Name.Length > AssetBase.MAX_ASSET_NAME)
+            {
+                string assetName = asset.Name.Substring(0, AssetBase.MAX_ASSET_NAME);
+                m_log.WarnFormat(
+                    "[FSASSETS]: Name for asset {0} truncated from {1} to {2} characters on add",
+                    asset.ID, asset.Name.Length, assetName.Length);
+                asset.Name = assetName;
+            }
+
+            if (asset.Description.Length > AssetBase.MAX_ASSET_DESC)
+            {
+                string assetDescription = asset.Description.Substring(0, AssetBase.MAX_ASSET_DESC);
+                m_log.WarnFormat(
+                    "[FSASSETS]: Description for asset {0} truncated from {1} to {2} characters on add",
+                    asset.ID, asset.Description.Length, assetDescription.Length);
+                asset.Description = assetDescription;
+            }
+
+            // Deal with bug introduced in Oct. 20 (1eb3e6cc43e2a7b4053bc1185c7c88e22356c5e8)
+            // Fix bad object XML before storing on this server.
+            if (asset.Type == (int)AssetType.Object && asset.Data != null)
+            {
+                string xml = ExternalRepresentationUtils.SanitizeXml(Utils.BytesToString(asset.Data));
+                asset.Data = Utils.StringToBytes(xml);
+            }
+
             string hash = GetSHA256Hash(asset.Data);
-            
-            // ... Sanitization and ID handling ...
         
             string spoolSubDir = Path.Combine(m_SpoolDirectory, "spool");
+            Directory.CreateDirectory(spoolSubDir);
+
             string assetFile = Path.Combine(spoolSubDir, asset.ID + ".asset");
             string metaFile = Path.Combine(spoolSubDir, asset.ID + ".meta");
+            string assetTempFile = assetFile + ".tmp";
+            string metaTempFile = metaFile + ".tmp";
         
-            if (!File.Exists(assetFile))
+            if (!File.Exists(assetFile) || !File.Exists(metaFile))
             {
-                // Write Data to RAM Disk
-                File.WriteAllBytes(assetFile, asset.Data);
+                if (File.Exists(assetTempFile))
+                    File.Delete(assetTempFile);
+                if (File.Exists(metaTempFile))
+                    File.Delete(metaTempFile);
+
+                // Write the payload first, then metadata last. The writer only processes .meta files.
+                File.WriteAllBytes(assetTempFile, asset.Data);
+                if (File.Exists(assetFile))
+                    File.Delete(assetFile);
+                File.Move(assetTempFile, assetFile);
         
-                // Write Metadata to RAM Disk as OSD (JSON)
-                // we will store to db in Write thread
                 OSDMap metaMap = new OSDMap();
                 metaMap["ID"] = asset.FullID;
                 metaMap["Name"] = asset.Name;
                 metaMap["Description"] = asset.Description;
                 metaMap["Type"] = asset.Type;
+                metaMap["Flags"] = (int)asset.Metadata.Flags;
                 metaMap["Hash"] = hash;
+                metaMap["ContentType"] = asset.Metadata.ContentType ?? SLUtil.SLAssetTypeToContentType((int)asset.Type);
                 
-                File.WriteAllText(metaFile, OSDParser.SerializeJsonString(metaMap));
+                File.WriteAllText(metaTempFile, OSDParser.SerializeJsonString(metaMap));
+                if (File.Exists(metaFile))
+                    File.Delete(metaFile);
+                File.Move(metaTempFile, metaFile);
+
+                m_log.InfoFormat(
+                    "[FSASSETS]: Queued asset {0}, type={1}, nameLen={2}, descLen={3}, dataLen={4}, hash={5}",
+                    asset.ID,
+                    asset.Type,
+                    asset.Name.Length,
+                    asset.Description.Length,
+                    asset.Data.Length,
+                    hash);
             }
         
             return asset.ID;
@@ -755,3 +902,4 @@ namespace OpenSim.Services.FSAssetService
         }
     }
 }
+

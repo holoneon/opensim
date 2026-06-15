@@ -1,0 +1,41 @@
+<Project
+    name="HoloneonOarControl"
+    path="addon-modules/HoloneonOarControl"
+    version="0.1.0-$Rev$"
+    type="Library"
+    frameworkVersion="net8_0">
+
+  <Configuration name="Debug">
+    <Options>
+      <OutputPath>../../bin/</OutputPath>
+    </Options>
+  </Configuration>
+
+  <Configuration name="Release">
+    <Options>
+      <OutputPath>../../bin/</OutputPath>
+    </Options>
+  </Configuration>
+
+  <ReferencePath>../../bin</ReferencePath>
+
+  <Reference name="OpenSim.Framework" />
+  <Reference name="OpenSim.Region.Framework" />
+  <Reference name="OpenSim.Services.Interfaces" />
+
+  <Reference name="OpenMetaverse" />
+  <Reference name="OpenMetaverseTypes" />
+
+  <Reference name="log4net" />
+  <Reference name="Nini" />
+  <Reference name="Mono.Addins" />
+
+  <Files>
+    <Match pattern="*.cs" recurse="false" />
+    <Exclude name="obj/**" />
+    <Exclude name="bin/**" />
+    <Exclude name="**/obj/**" />
+    <Exclude name="**/bin/**" />
+  </Files>
+
+</Project>

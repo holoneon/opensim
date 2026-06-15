@@ -709,30 +709,6 @@ namespace OpenSim.Region.CoreModules.Framework.EntityTransfer
             }
         }
 
-	// Cache av appearance to speed teleport
-        private static Dictionary<UUID, AvatarAppearance> m_fullAppearanceCache
-            = new Dictionary<UUID, AvatarAppearance>();
-        
-        private void CacheFullAppearance(UUID agentID, AvatarAppearance appearance)
-        {
-            lock (m_fullAppearanceCache)
-                m_fullAppearanceCache[agentID] = appearance;
-        }
-        
-	//called by ScenePresence/CompleteMovement to re-hydrate av
-        public static AvatarAppearance GetCachedAppearance(UUID agentID)
-        {
-            lock (m_fullAppearanceCache)
-            {
-                if (m_fullAppearanceCache.TryGetValue(agentID, out var app))
-                {
-                    m_fullAppearanceCache.Remove(agentID);
-                    return app;
-                }
-            }
-            return null;
-        }
-
         /// <summary>
         /// Teleports the agent to another region.
         /// This method doesn't manage the transfer state; the caller must do that.
@@ -829,50 +805,21 @@ namespace OpenSim.Region.CoreModules.Framework.EntityTransfer
             sp.ControllingClient.SendTeleportStart(teleportFlags);
   
             AgentCircuitData currentAgentCircuit = sp.Scene.AuthenticateHandler.GetAgentCircuitData(sp.ControllingClient.CircuitCode);
-
             AgentCircuitData agentCircuit = sp.ControllingClient.RequestClientInfo();
             agentCircuit.startpos = position;
             agentCircuit.child = true;
-            
-            // Keep lightweight placeholder transfer
-            AvatarAppearance fullAppearance = sp.Appearance;
-            agentCircuit.Appearance = new AvatarAppearance()
+
+            agentCircuit.Appearance = new() { AvatarHeight = sp.Appearance.AvatarHeight };
+
+            if (currentAgentCircuit is not null)
             {
-                AvatarHeight = fullAppearance.AvatarHeight
-            };
-            
-            // Serialize full appearance
-            string appearanceJson = HoloAppearanceSerializer.Serialize(sp);
-            (string cid, string sha256) = HoloAppearanceStore.PutAppearance(appearanceJson);
-            
-            // 🔥 ALWAYS create a fresh dictionary
-            agentCircuit.ServiceURLs = new Dictionary<string, object>();
-            
-            // Copy existing values if present
-            if (currentAgentCircuit?.ServiceURLs != null)
-            {
-                foreach (var kvp in currentAgentCircuit.ServiceURLs)
-                    agentCircuit.ServiceURLs[kvp.Key] = kvp.Value;
-            }
-            
-            // Copy identity fields
-            if (currentAgentCircuit != null)
-            {
+                agentCircuit.ServiceURLs = currentAgentCircuit.ServiceURLs;
                 agentCircuit.IPAddress = currentAgentCircuit.IPAddress;
                 agentCircuit.Viewer = currentAgentCircuit.Viewer;
                 agentCircuit.Channel = currentAgentCircuit.Channel;
                 agentCircuit.Mac = currentAgentCircuit.Mac;
                 agentCircuit.Id0 = currentAgentCircuit.Id0;
             }
-            
-            // 🔥 ALWAYS set CID (outside condition)
-            agentCircuit.ServiceURLs["holo:appearance:cid"] = cid;
-            agentCircuit.ServiceURLs["holo:appearance:sha256"] = sha256;
-            agentCircuit.ServiceURLs["holo:appearance:version"] = "1";
-            agentCircuit.ServiceURLs["holo:appearance:ts"] = Util.UnixTimeSinceEpoch().ToString();
-            
-            m_log.Info($"[HOLO DoTeleportInternal]: SET CID {cid} for {sp.Name}");
-
 
             Util.RegionHandleToRegionLoc(destinationHandle, out uint newRegionX, out uint newRegionY);
             int oldSizeX = (int)m_sceneRegionInfo.RegionSizeX;
@@ -1141,25 +1088,6 @@ namespace OpenSim.Region.CoreModules.Framework.EntityTransfer
                 m_scene.CloseAgent(sp.UUID, false);
             }
             sp.IsInTransit = false;
-        }
-
-	// Strategy is to first simplify Avatar before transfer, then re-hydrate after TP success
-	// Heavy AV's often fail because they take too long to move
-	// This function creates a basic lightweight AV
-        private AvatarAppearance CreateStubAppearance(AvatarAppearance original)
-        {
-            var stub = new AvatarAppearance();
-        
-            // Keep shape (important: avoids T-pose horror)
-            stub.Wearables = original.Wearables;
-        
-            // Replace baked textures with defaults (fast, no asset fetch)
-            stub.Texture = new Primitive.TextureEntry(UUID.Zero);
-        
-            // Clear visual params? NO — keep them or avatar shape breaks
-            stub.VisualParams = original.VisualParams;
-        
-            return stub;
         }
 
         private void TransferAgent_V2(ScenePresence sp, AgentCircuitData agentCircuit, GridRegion reg, GridRegion finalDestination,
@@ -2937,3 +2865,4 @@ namespace OpenSim.Region.CoreModules.Framework.EntityTransfer
         }
     }
 }
+

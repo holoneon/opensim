@@ -1,0 +1,12 @@
+[HoloPhysicsGuard]
+Enabled = true
+DryRun = true
+SleepWhenEmpty = true
+CheckIntervalSeconds = 30
+EmptyDelaySeconds = 60
+ZeroVelocities = true
+Verbose = true
+
+AlwaysSleepNameContains = bowling_pin,bowling_ball
+NeverSleepNameContains = elevator,boat,vehicle
+

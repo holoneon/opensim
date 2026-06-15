@@ -59,8 +59,6 @@ namespace OpenSim.Region.Framework.Scenes
 
         public delegate void SynchronizeSceneHandler(Scene scene);
 
-	public string HoloAppearanceCid { get; set; }
-	public string HoloAppearanceSha256 { get; set; }
 
         #region Fields
 
@@ -814,8 +812,6 @@ namespace OpenSim.Region.Framework.Scenes
             };
 
             m_asyncInventorySender = new AsyncInventorySender(this);
-
-	    HoloAppearanceStore.Configure(m_config);
 
             #region Region Settings
 
@@ -3143,28 +3139,6 @@ namespace OpenSim.Region.Framework.Scenes
             // In practice, the lock (this) in LLUDPServer.AddNewClient() currently lock across all
             // AddNewClient() operations (though not other ops).
             // In the future this can be relieved once locking per agent (not necessarily on AgentCircuitData) is improved.
-
-            /* bail if circuit is null, throwing exception:
-
-
-
-               2026-04-11 09:56:09,593 ERROR [LLUDPSERVER]: UseCircuitCode handling from endpoint 10........:60483, client unknown unknown failed.  Exception Value cannot be null.   at System.Threading.Monitor.ReliableEnter(Object obj, Boolean& lockTaken)
-                   at OpenSim.Region.Framework.Scenes.Scene.AddNewAgent(IClientAPI client, PresenceType type) in /opt/opensim/OpenSim/Region/Framework/Scenes/Scene.cs:line 3144
-                   at OpenSim.Region.ClientStack.LindenUDP.LLClientView.Start() in /opt/opensim/OpenSim/Region/ClientStack/Linden/UDP/LLClientView.cs:line 777
-                   at OpenSim.Region.ClientStack.LindenUDP.LLUDPServer.AddClient(UInt32 circuitCode, UUID agentID, UUID sessionID, IPEndPoint remoteEndPoint, AuthenticateResponse sessionInfo) in /opt/opensim/OpenSim/Region/ClientStack/Linden/UDP/LLUDPServer.cs:line 1739
-                   at OpenSim.Region.ClientStack.LindenUDP.LLUDPServer.HandleUseCircuitCode(Object o) in /opt/opensim/OpenSim/Region/ClientStack/Linden/UDP/LLUDPServer.cs:line 1581
-
-            */
-
-            if (aCircuit == null)
-            {
-                m_log.ErrorFormat(
-                     "[CRITICAL]: Circuit vanished mid-login for {0} ({1}) in region {2}",
-                     client.Name, client.AgentId, RegionInfo.RegionName);
-
-                return null;
-            }
-
             lock (aCircuit)
             {
                 vialogin = (aCircuit.teleportFlags & (uint)(Constants.TeleportFlags.ViaHGLogin | Constants.TeleportFlags.ViaLogin)) != 0;
@@ -4201,20 +4175,6 @@ namespace OpenSim.Region.Framework.Scenes
                 }
 
                 m_authenticateHandler.AddNewCircuit(acd);
-
-                // === HOLO: Extract appearance pointer and persist into circuit ===
-                if (acd.ServiceURLs != null)
-                {
-                    if (acd.ServiceURLs.TryGetValue("holo:appearance:cid", out var cid))
-                    {
-			HoloAppearanceCid = cid?.ToString();
-                    }
-                
-                    if (acd.ServiceURLs.TryGetValue("holo:appearance:sha256", out var sha))
-                    {
-			HoloAppearanceSha256 = sha?.ToString();
-                    }
-                }
 
                 if (sp is null) // We don't have an [child] agent here already
                 {
@@ -6345,3 +6305,4 @@ Environment.Exit(1);
 
     }
 }
+

@@ -1,0 +1,10 @@
+<Addin id="HoloneonOarControl" version="0.1.0">
+  <Runtime>
+    <Import assembly="HoloneonOarControl.dll" />
+  </Runtime>
+
+  <Extension path="/OpenSim/RegionModules">
+    <RegionModule id="HoloneonOarControl"
+                  type="Holoneon.OarControl.HoloneonOarControlModule" />
+  </Extension>
+</Addin>
