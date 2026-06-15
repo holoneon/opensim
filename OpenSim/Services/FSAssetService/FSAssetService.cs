@@ -583,24 +583,15 @@ namespace OpenSim.Services.FSAssetService
                                  metaMap["ContentType"].AsString().Equals("image/x-j2c", StringComparison.OrdinalIgnoreCase))
                         {
                             assetType = (sbyte)AssetType.Texture;
-                            m_log.WarnFormat(
-                                "[FSASSETS]: Metadata {0} missing Type, defaulting to Texture because ContentType is image/x-j2c",
-                                metaPath);
                         }
                         else if (metaMap.ContainsKey("Name") &&
                                  metaMap["Name"].AsString().StartsWith("terrainImage_", StringComparison.OrdinalIgnoreCase))
                         {
                             assetType = (sbyte)AssetType.Texture;
-                            m_log.WarnFormat(
-                                "[FSASSETS]: Metadata {0} missing Type, defaulting terrainImage to Texture",
-                                metaPath);
                         }
                         else
                         {
                             assetType = 0;
-                            m_log.WarnFormat(
-                                "[FSASSETS]: Metadata {0} missing Type, defaulting to Texture",
-                                metaPath);
                         }
 
 
