@@ -1975,7 +1975,18 @@ namespace OpenSim.Region.CoreModules.World.Land
 
         private void EventManagerOnRegisterCaps(UUID agentID, Caps caps)
         {
-            caps.RegisterSimpleHandler("RemoteParcelRequest", new SimpleOSDMapHandler("POST","/" + UUID.Random(), RemoteParcelRequest));
+//            caps.RegisterSimpleHandler("RemoteParcelRequest", new SimpleOSDMapHandler("POST","/" + UUID.Random(), RemoteParcelRequest));
+
+//better logging
+
+caps.RegisterSimpleHandler("RemoteParcelRequest",
+    new SimpleOSDMapHandler("POST", "/" + UUID.Random(),
+        delegate(IOSHttpRequest request, IOSHttpResponse response, OSDMap args)
+        {
+            RemoteParcelRequest(agentID, request, response, args);
+        }));
+
+
 
             caps.RegisterSimpleHandler("ParcelPropertiesUpdate", new SimpleStreamHandler("/" + UUID.Random(),
                 delegate (IOSHttpRequest request, IOSHttpResponse response)
@@ -2102,8 +2113,15 @@ namespace OpenSim.Region.CoreModules.World.Land
         //     <uuid>xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</uuid>
         //   </map>
         // </llsd>
-        private void RemoteParcelRequest(IOSHttpRequest request, IOSHttpResponse response, OSDMap args)
+	private void RemoteParcelRequest(UUID agentID, IOSHttpRequest request, IOSHttpResponse response, OSDMap args)
+//        private void RemoteParcelRequest(IOSHttpRequest request, IOSHttpResponse response, OSDMap args)
         {
+
+m_log.WarnFormat(
+    "[LAND MANAGEMENT MODULE]: RemoteParcelRequest agent={0} from={1}",
+    agentID,
+    request.RemoteIPEndPoint
+);
             UUID parcelID = new();
             try
             {
@@ -2117,7 +2135,33 @@ namespace OpenSim.Region.CoreModules.World.Land
                     {
                         // if you do a "About Landmark" on a landmark a second time, the viewer sends the
                         // region_handle it got earlier via RegionHandleRequest
-                        ulong regionHandle = tmp.AsULong();
+
+// change to see if libomp update caused regression
+
+byte[] handleBytes = tmp.AsBinary();
+
+if (handleBytes == null || handleBytes.Length != 8)
+{
+    m_log.WarnFormat(
+        "[LAND MANAGEMENT MODULE]: Bad RemoteParcelRequest region_handle length={0}",
+        handleBytes == null ? -1 : handleBytes.Length
+    );
+
+    response.StatusCode = (int)HttpStatusCode.BadRequest;
+    return;
+}
+
+ulong regionHandle =
+    ((ulong)handleBytes[0] << 56) |
+    ((ulong)handleBytes[1] << 48) |
+    ((ulong)handleBytes[2] << 40) |
+    ((ulong)handleBytes[3] << 32) |
+    ((ulong)handleBytes[4] << 24) |
+    ((ulong)handleBytes[5] << 16) |
+    ((ulong)handleBytes[6] << 8) |
+    handleBytes[7];
+
+                  //      ulong regionHandle = tmp.AsULong();
                         if(regionHandle == myHandle)
                         {
                             ILandObject l = GetLandObjectClippedXY(x, y);
