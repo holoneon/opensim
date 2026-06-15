@@ -280,6 +280,7 @@ namespace OpenSim.Framework
         /// <param name="b"></param>
         /// <param name="c"></param>
         /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double lerp(double a, double b, double c)
         {
             return (b * a) + (c * (1 - a));
@@ -458,6 +459,7 @@ namespace OpenSim.Framework
         // legacy, do not use
         public static Random RandomClass
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get {  return Random.Shared;}
         }
 
@@ -2264,9 +2266,9 @@ namespace OpenSim.Framework
         /// <returns></returns>
         public static T GetConfigVarFromSections<T>(IConfigSource config, string varname, string[] sections, object val)
         {
-            foreach (string section in sections.AsSpan())
+            for (int i = 0 ; i < sections.Length; i++)
             {
-                IConfig cnf = config.Configs[section];
+                IConfig cnf = config.Configs[sections[i]];
                 if (cnf == null)
                     continue;
 
@@ -2283,6 +2285,119 @@ namespace OpenSim.Framework
             }
             return (T)val;
         }
+
+        /// <summary>
+        /// Gets the value of a configuration variable by looking into
+        /// multiple sections in order. Returns as soon one is found, ignoring other sections
+        /// </summary>
+        /// <remarks>
+        /// If no value is found then the given default value is returned
+        /// </remarks>
+        /// <typeparam name="T">Type of the variable</typeparam>
+        /// <param name="config">The configuration object</param>
+        /// <param name="varname">The configuration variable</param>
+        /// <param name="sections">Ordered sequence of sections to look at</param>
+        /// <param name="val">Default value</param>
+        /// <returns></returns>
+        public static T GetFirstConfigVarFromSections<T>(IConfigSource config, string varname, string[] sections, object val)
+        {
+            for (int i = 0 ; i < sections.Length; i++)
+            {
+                IConfig cnf = config.Configs[sections[i]];
+                if (cnf == null)
+                    continue;
+
+                string text = cnf.Get(varname);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    if (typeof(T) == typeof(string))
+                        return Unsafe.As<string, T>(ref text);
+
+                    if (typeof(T) == typeof(bool))
+                    {
+                        bool b = bool.Parse(text);
+                        return Unsafe.As<bool, T>(ref b);
+                    }
+
+                    if (typeof(T) == typeof(int))
+                    {
+                        int ti = int.Parse(text);
+                        return Unsafe.As<int, T>(ref ti);
+                    }
+
+                    if (typeof(T) == typeof(float))
+                    {
+                        float f = float.Parse(text);
+                        return Unsafe.As<float, T>(ref f);
+                    }
+
+                    if (typeof(T) == typeof(double))
+                    {
+                        double d = double.Parse(text);
+                        return Unsafe.As<double, T>(ref d);
+                    }
+                }
+            }
+
+            return val == null ? default : (T) val;
+        }
+
+        /// <summary>
+        /// Gets the value of a configuration variable by looking into
+        /// multiple sections in order. Returns as soon one is found, ignoring other sections
+        /// </summary>
+        /// <remarks>
+        /// If no value is found then the default value of T is returned
+        /// </remarks>
+        /// <typeparam name="T">Type of the variable</typeparam>
+        /// <param name="config">The configuration object</param>
+        /// <param name="varname">The configuration variable</param>
+        /// <param name="sections">Ordered sequence of sections to look at</param>
+        /// <returns></returns>
+
+        public static T GetFirstConfigVarFromSections<T>(IConfigSource config, string varname, string[] sections)
+        {
+            for (int i = 0 ; i < sections.Length; i++)
+            {
+                IConfig cnf = config.Configs[sections[i]];
+                if (cnf == null)
+                    continue;
+
+                string text = cnf.Get(varname);
+                if (!string.IsNullOrEmpty(text))
+                {
+                    if (typeof(T) == typeof(string))
+                        return Unsafe.As<string, T>(ref text);
+
+                    if (typeof(T) == typeof(bool))
+                    {
+                        bool b = bool.Parse(text);
+                        return Unsafe.As<bool, T>(ref b);
+                    }
+
+                    if (typeof(T) == typeof(int))
+                    {
+                        int ti = int.Parse(text);
+                        return Unsafe.As<int, T>(ref ti);
+                    }
+
+                    if (typeof(T) == typeof(float))
+                    {
+                        float f = float.Parse(text);
+                        return Unsafe.As<float, T>(ref f);
+                    }
+
+                    if (typeof(T) == typeof(double))
+                    {
+                        double d = double.Parse(text);
+                        return Unsafe.As<double, T>(ref d);
+                    }
+                }
+            }
+
+            return default;
+        }
+
 
         public static void MergeEnvironmentToConfig(IConfigSource ConfigSource)
         {

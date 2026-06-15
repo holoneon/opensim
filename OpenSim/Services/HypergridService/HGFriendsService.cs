@@ -78,7 +78,7 @@ namespace OpenSim.Services.HypergridService
                 if (configName != String.Empty)
                     m_ConfigName = configName;
 
-                Object[] args = new Object[] { config };
+                Object[] args = [ config ];
 
                 IConfig serverConfig = config.Configs[m_ConfigName];
                 if (serverConfig == null)
@@ -309,29 +309,39 @@ namespace OpenSim.Services.HypergridService
             // But now we need to confirm that the requester is who he says he is
             // before we act on the friendship request.
 
-            if (!fromName.Contains("@"))
+            if (!fromName.Contains('@'))
                 return;
 
             string[] parts = fromName.Split(new char[] {'@'});
             if (parts.Length != 2)
                 return;
 
-            string uriStr = "http://" + parts[1];
-            try
+            string uriStr = "http://" + parts[1].ToLower();
+            string SSLuriStr = "https://" + parts[1].ToLower();
+            if(!Uri.TryCreate(uriStr, UriKind.Absolute, out _))
             {
-                new Uri(uriStr);
-            }
-            catch (UriFormatException)
-            {
+                m_log.DebugFormat("[HGFRIENDS SERVICE]: Malformed address {0}", parts[1].ToLower());
                 return;
             }
 
-            UserAgentServiceConnector uasConn = new UserAgentServiceConnector(uriStr);
+            UserAgentServiceConnector uasConn = new(uriStr);
+            // If fail to connect with http... try with https...
+            if (uasConn is null)
+            {
+                uasConn = new UserAgentServiceConnector(SSLuriStr);
+                if (uasConn is null)
+                {
+                    m_log.DebugFormat("[HGFRIENDS SERVICE]: UserAgentServiceConnector failed to connect to {0}", parts[1].ToLower());
+                    return;
+                }
+                uriStr = SSLuriStr;
+            }
+            
             Dictionary<string, object> servers = uasConn.GetServerURLs(fromID);
-            if (!servers.ContainsKey("FriendsServerURI"))
+            if (!servers.TryGetValue("FriendsServerURI", out object friendsServerURI))
                 return;
 
-            HGFriendsServicesConnector friendsConn = new HGFriendsServicesConnector(servers["FriendsServerURI"].ToString());
+            HGFriendsServicesConnector friendsConn = new(friendsServerURI.ToString());
             if (!friendsConn.ValidateFriendshipOffered(fromID, toID))
             {
                 m_log.WarnFormat("[HGFRIENDS SERVICE]: Friendship request from {0} to {1} is invalid. Impersonations?", fromID, toID);

@@ -993,7 +993,8 @@ namespace OpenSim.Region.CoreModules.Asset
             try
             {
                 // If the file is already cached, don't cache it, just touch it so access time is updated
-                if (!replace && File.Exists(filename))
+                bool fileExists = File.Exists(filename);
+                if (!replace && fileExists)
                 {
                     if (m_updateFileTimeOnCacheHit)
                         UpdateFileLastAccessTime(filename);
@@ -1030,7 +1031,7 @@ namespace OpenSim.Region.CoreModules.Asset
 
                 try
                 {
-                    if(replace)
+                    if(fileExists)
                         File.Delete(filename);
                     File.Move(tempname, filename);
                 }

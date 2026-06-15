@@ -80,7 +80,7 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api.Plugins
         {
             m_CmdManager = CmdManager;
             maximumRange = CmdManager.m_ScriptEngine.Config.GetFloat("SensorMaxRange", 96.0f);
-            maximumToReturn = CmdManager.m_ScriptEngine.Config.GetInt("SensorMaxResults", 16);
+            maximumToReturn = CmdManager.m_ScriptEngine.Config.GetInt("SensorMaxResults", 32);
             m_npcModule = m_CmdManager.m_ScriptEngine.World.RequestModuleInterface<INPCModule>();
         }
 
@@ -96,7 +96,7 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api.Plugins
         private const int SCRIPTED = 8;
 
         private readonly float maximumRange = 96.0f;
-        private readonly int maximumToReturn = 16;
+        private readonly int maximumToReturn = 32;
 
         //
         // Sensed entity

@@ -115,28 +115,39 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
                 }
 
                 // This is it! Let's ask the other world
-                if (words[0].Contains("."))
+                if (words[0].Contains('.'))
                 {
                     string[] names = words[0].Split(Util.SplitDotArray);
                     if (names.Length >= 2)
                     {
-                        string uriStr = "http://" + words[1];
+                        ReadOnlySpan<char> words1lower = words[1].ToLower();
+                        string uriStr = string.Concat("http://", words1lower);
+
                         // Let's check that the last name is a valid address
-                        try
+                        if(!Uri.TryCreate(uriStr, UriKind.Absolute, out _))
                         {
-                            new Uri(uriStr);
-                        }
-                        catch (UriFormatException)
-                        {
-                            m_log.DebugFormat("[USER MANAGEMENT MODULE]: Malformed address {0}", uriStr);
+                            m_log.Debug($"[USER MANAGEMENT MODULE]: Malformed address {words1lower}");
                             return;
                         }
 
                         UUID userID = UUID.Zero;
-                        uriStr = uriStr.ToLower();
                         if(!WebUtil.GlobalExpiringBadURLs.ContainsKey(uriStr))
                         {
-                            UserAgentServiceConnector uasConn = new UserAgentServiceConnector(uriStr);
+                            UserAgentServiceConnector uasConn = new(uriStr);
+
+                            // If fail to connect with http... try with https...
+                            if (uasConn is null)
+                            {
+                                string SSLuriStr = string.Concat("https://", words1lower); // words[1] already validated
+                                uasConn = new UserAgentServiceConnector(SSLuriStr);
+                                if (uasConn is null)
+                                {
+                                    m_log.Debug($"[USER MANAGEMENT MODULE]: UserAgentServiceConnector failed to connect to {words1lower}");
+                                    return;
+                                }
+                                uriStr = SSLuriStr;
+                            }
+                            
                             try
                             {
                                 userID = uasConn.GetUUID(names[0], names[1]);
@@ -147,18 +158,20 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
                             }
                         }
 
-                        if (!userID.Equals(UUID.Zero))
+                        if (userID.IsNotZero())
                         {
-                            UserData ud = new UserData();
-                            ud.Id = userID;
-                            ud.FirstName = words[0];
-                            ud.LastName = "@" + words[1];
+                            UserData ud = new()
+                            {
+                                Id = userID,
+                                FirstName = words[0],
+                                LastName = "@" + words[1]
+                            };
                             users.Add(ud);
                             AddUser(userID, names[0], names[1], uriStr);
-                            m_log.DebugFormat("[USER MANAGEMENT MODULE]: User {0}@{1} found", words[0], words[1]);
+                            m_log.Debug($"[USER MANAGEMENT MODULE]: User {words[0]}@{words[1]} found");
                         }
                         else
-                            m_log.DebugFormat("[USER MANAGEMENT MODULE]: User {0}@{1} not found", words[0], words[1]);
+                            m_log.Debug($"[USER MANAGEMENT MODULE]: User {words[0]}@{words[1]} not found");
                     }
                 }
             }
