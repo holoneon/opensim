@@ -57,7 +57,6 @@ namespace OpenSim.Services.FSAssetService
         {
             if (data == null || data.Length == 0)
             {
-                m_log.Warn("[FSASSETS]: Refusing to upload empty asset data to IPFS");
                 return string.Empty;
             }
 
@@ -623,7 +622,10 @@ namespace OpenSim.Services.FSAssetService
         
                         if (string.IsNullOrEmpty(cid))
                         {
-                            m_log.ErrorFormat("[FSASSETS]: IPFS upload failed for asset {0}; leaving spool files for retry", metadata.ID);
+                            //m_log.ErrorFormat("[FSASSETS]: IPFS upload failed for asset {0}; leaving spool files for retry", metadata.ID);
+			    //delete empty files
+                            File.Delete(assetPath);
+                            File.Delete(metaPath);
                             continue;
                         }
 
