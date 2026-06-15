@@ -564,11 +564,45 @@ namespace OpenSim.Services.FSAssetService
                             continue;
                         }
 
-                        if (!metaMap.ContainsKey("ID") || !metaMap.ContainsKey("Type") || !metaMap.ContainsKey("Hash"))
+			//Map images etc don't have 'type' field so we have to determine
+
+                        if (!metaMap.ContainsKey("ID") || !metaMap.ContainsKey("Hash"))
                         {
                             m_log.ErrorFormat("[FSASSETS]: Metadata missing required fields for {0}", metaPath);
                             continue;
                         }
+
+
+                        sbyte assetType;
+                        
+                        if (metaMap.ContainsKey("Type"))
+                        {
+                            assetType = (sbyte)metaMap["Type"].AsInteger();
+                        }
+                        else if (metaMap.ContainsKey("ContentType") &&
+                                 metaMap["ContentType"].AsString().Equals("image/x-j2c", StringComparison.OrdinalIgnoreCase))
+                        {
+                            assetType = (sbyte)AssetType.Texture;
+                            m_log.WarnFormat(
+                                "[FSASSETS]: Metadata {0} missing Type, defaulting to Texture because ContentType is image/x-j2c",
+                                metaPath);
+                        }
+                        else if (metaMap.ContainsKey("Name") &&
+                                 metaMap["Name"].AsString().StartsWith("terrainImage_", StringComparison.OrdinalIgnoreCase))
+                        {
+                            assetType = (sbyte)AssetType.Texture;
+                            m_log.WarnFormat(
+                                "[FSASSETS]: Metadata {0} missing Type, defaulting terrainImage to Texture",
+                                metaPath);
+                        }
+                        else
+                        {
+                            assetType = 0;
+                            m_log.WarnFormat(
+                                "[FSASSETS]: Metadata {0} missing Type, defaulting to Texture",
+                                metaPath);
+                        }
+
 
                         AssetMetadata metadata = new AssetMetadata();
                         metadata.ID = metaMap["ID"].AsString();
