@@ -55,6 +55,9 @@ namespace OpenSim.Region.CoreModules.Avatar.AvatarFactory
 
         private Scene m_scene = null;
 
+private ConcurrentDictionary<string, long> m_rebakeThrottle = new ConcurrentDictionary<string, long>();
+private const int REBAKE_THROTTLE_SECONDS = 30;
+
         private int m_savetime = 5; // seconds to wait before saving changed appearance
         private int m_sendtime = 2; // seconds to wait before sending changed appearance
 
@@ -203,7 +206,9 @@ namespace OpenSim.Region.CoreModules.Avatar.AvatarFactory
 
                     //WriteBakedTexturesReport(sp, m_log.DebugFormat);
 
-                    UpdateBakedTextureCache(sp, cacheItems);
+
+bool bakedCacheChanged = UpdateBakedTextureCache(sp, cacheItems);
+changed = bakedCacheChanged || changed;
 
                     // This appears to be set only in the final stage of the appearance
                     // update transaction. In theory, we should be able to do an immediate
@@ -217,9 +222,10 @@ namespace OpenSim.Region.CoreModules.Avatar.AvatarFactory
                     return;
                 }
                 // save only if there were changes
-                if (changed)
+                if (changed) {
                     QueueAppearanceSave(sp.ControllingClient.AgentId);
-                QueueAppearanceSend(sp.ControllingClient.AgentId);
+                    QueueAppearanceSend(sp.ControllingClient.AgentId);
+                }
             }
 
             // m_log.WarnFormat("[AVFACTORY]: complete SetAppearance for {0}:\n{1}",client.AgentId,sp.Appearance.ToString());
@@ -451,11 +457,31 @@ namespace OpenSim.Region.CoreModules.Avatar.AvatarFactory
  
             sp.Appearance.WearableCacheItems = wearableCache;
 
-            if (missing.Count > 0)
-            {
-                foreach (UUID id in missing)
-                    sp.ControllingClient.SendRebakeAvatarTextures(id);
-            }
+if (missing.Count > 0)
+{
+    long now = DateTime.UtcNow.Ticks;
+
+    foreach (UUID id in missing)
+    {
+        string key = sp.UUID.ToString() + ":" + id.ToString();
+
+        long last;
+        if (m_rebakeThrottle.TryGetValue(key, out last))
+        {
+            TimeSpan age = new TimeSpan(now - last);
+            if (age.TotalSeconds < REBAKE_THROTTLE_SECONDS)
+                continue;
+        }
+
+        m_rebakeThrottle[key] = now;
+
+        m_log.DebugFormat(
+            "[AVFACTORY]: Missing baked texture {0} for {1}, requesting rebake",
+            id, sp.Name);
+
+        sp.ControllingClient.SendRebakeAvatarTextures(id);
+    }
+}
 
             bool changed = false;
             if (validDirtyBakes > 0 && hits == cacheItems.Length)
