@@ -207,8 +207,7 @@ private const int REBAKE_THROTTLE_SECONDS = 30;
                     //WriteBakedTexturesReport(sp, m_log.DebugFormat);
 
 
-bool bakedCacheChanged = UpdateBakedTextureCache(sp, cacheItems);
-changed = bakedCacheChanged || changed;
+			UpdateBakedTextureCache(sp, cacheItems);
 
                     // This appears to be set only in the final stage of the appearance
                     // update transaction. In theory, we should be able to do an immediate
@@ -224,8 +223,8 @@ changed = bakedCacheChanged || changed;
                 // save only if there were changes
                 if (changed) {
                     QueueAppearanceSave(sp.ControllingClient.AgentId);
-                    QueueAppearanceSend(sp.ControllingClient.AgentId);
-                }
+		}
+                QueueAppearanceSend(sp.ControllingClient.AgentId);
             }
 
             // m_log.WarnFormat("[AVFACTORY]: complete SetAppearance for {0}:\n{1}",client.AgentId,sp.Appearance.ToString());
