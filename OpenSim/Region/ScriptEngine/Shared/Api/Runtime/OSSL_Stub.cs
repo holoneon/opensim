@@ -1798,6 +1798,12 @@ namespace OpenSim.Region.ScriptEngine.Shared.ScriptBase
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public LSL_String osGetNonce(string service, string action)
+        {
+            return m_OSSL_Functions.osGetNonce(service, action);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public LSL_String osAESEncrypt(string secret, string plainText)
         {
             return m_OSSL_Functions.osAESEncrypt(secret, plainText);

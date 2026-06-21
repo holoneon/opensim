@@ -902,6 +902,8 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api.Interfaces
        LSL_Integer osGetSittingAvatarsCount(LSL_Key object_id);
 	//ApiDesc Get System Environment Variable. Returns string.
 	LSL_String osGetEnvironmentVariable(string key);
+	//ApiDesc Issues a short-lived nonce bound to the calling script, object, owner/avatar, and region for authenticated HTTP requests
+	LSL_String osGetNonce(string service, string action);
         //ApiDesc Encrypt a plain text using AES-256-CBC Symmetric Algorithm Key (secret) and a random Initialization Vector (IV). Returns the Hex string of the IV bytes and the Hex string of the encrypted text bytes separated with (:).
         LSL_String osAESEncrypt(string secret, string plainText);
         //ApiDesc Encrypt a plain text using AES-256-CBC Symmetric Algorithm Key (secret) and a custom Initialization Vector (ivString). Returns the Hex string of the IV bytes and the Hex string of the encrypted text bytes separated with (:).

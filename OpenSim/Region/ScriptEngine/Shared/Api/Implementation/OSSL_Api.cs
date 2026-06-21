@@ -47,6 +47,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Security.Cryptography;
+
 using GridRegion = OpenSim.Services.Interfaces.GridRegion;
 using LSL_Float = OpenSim.Region.ScriptEngine.Shared.LSL_Types.LSLFloat;
 using LSL_Integer = OpenSim.Region.ScriptEngine.Shared.LSL_Types.LSLInteger;
@@ -6606,6 +6607,76 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
                 return LSL_String.Empty;
             }
             
+        }
+
+/* mod: get nonce tied to user UUID */
+
+        public LSL_String osGetNonce(string service, string action)
+        {
+            if (string.IsNullOrWhiteSpace(service) || string.IsNullOrWhiteSpace(action))
+                return LSL_String.Empty;
+        
+            service = service.Trim();
+            action = action.Trim();
+        
+            if (service.Length > 64 || action.Length > 64)
+            {
+                OSSLShoutError("osGetNonce: service/action too long");
+                return LSL_String.Empty;
+            }
+        
+            try
+            {
+                UUID ownerID = m_item.OwnerID;
+                UUID objectID = m_host.UUID;
+                string objectName = m_host.Name ?? "";
+        
+                UUID regionID = World.RegionInfo.RegionID;
+                string regionName = World.RegionInfo.RegionName ?? "";
+        
+                long createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        
+                string json =
+                    "{"
+                    + "\"service\":\"" + EscapeJson(service) + "\","
+                    + "\"action\":\"" + EscapeJson(action) + "\","
+                    + "\"owner_uuid\":\"" + ownerID + "\","
+                    + "\"object_uuid\":\"" + objectID + "\","
+                    + "\"object_name\":\"" + EscapeJson(objectName) + "\","
+                    + "\"region_uuid\":\"" + regionID + "\","
+                    + "\"region_name\":\"" + EscapeJson(regionName) + "\","
+                    + "\"created_at\":" + createdAt
+                    + "}";
+        
+                string nonce = HoloNonceStore.IssueNonce(json);
+        
+                if (string.IsNullOrEmpty(nonce))
+                {
+                    OSSLShoutError("osGetNonce: Failed to store nonce!");
+                    return LSL_String.Empty;
+                }
+        
+                return new LSL_String(nonce);
+            }
+            catch (Exception e)
+            {
+                m_log.Error("[osGetNonce]: " + e);
+                OSSLShoutError("osGetNonce: Failed to get nonce!");
+                return LSL_String.Empty;
+            }
+        }
+
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return "";
+        
+            return s
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n")
+                .Replace("\t", "\\t");
         }
 
         public LSL_String osAESEncrypt(string secret, string plainText)
