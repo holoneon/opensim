@@ -71,6 +71,7 @@ namespace OpenSim.Services.Interfaces
             Email = email;
             ServiceURLs = new Dictionary<string, object>();
             Created = Util.UnixTimeSinceEpoch();
+            DisplayName = string.Empty;
         }
 
         public UserAccount(UUID scopeID, UUID principalID, string firstName, string lastName, string email)
@@ -82,11 +83,13 @@ namespace OpenSim.Services.Interfaces
             Email = email;
             ServiceURLs = new Dictionary<string, object>();
             Created = Util.UnixTimeSinceEpoch();
+            DisplayName = string.Empty;
         }
 
         public string FirstName;
         public string LastName;
         public string Email;
+        public string DisplayName;
         public UUID PrincipalID;
         public UUID ScopeID;
         public int UserLevel;
@@ -111,6 +114,8 @@ namespace OpenSim.Services.Interfaces
                 FirstName = otmp.ToString();
             if (kvp.TryGetValue("LastName", out otmp))
                 LastName = otmp.ToString();
+            if (kvp.TryGetValue("DisplayName", out otmp))
+                DisplayName =  otmp.ToString();
             if (kvp.TryGetValue("Email", out otmp))
                 Email = otmp.ToString();
             if (kvp.TryGetValue("PrincipalID", out otmp))
@@ -152,6 +157,7 @@ namespace OpenSim.Services.Interfaces
             {
                 ["FirstName"] = FirstName,
                 ["LastName"] = LastName,
+                ["DisplayName"] = DisplayName,
                 ["Email"] = Email,
                 ["PrincipalID"] = PrincipalID.ToString(),
                 ["ScopeID"] = ScopeID.ToString(),

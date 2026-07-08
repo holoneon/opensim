@@ -192,12 +192,27 @@ namespace OpenSim.Services.UserAccountService
                 FirstName = d.FirstName,
                 LastName = d.LastName,
                 PrincipalID = d.PrincipalID,
+		DisplayName = d.DisplayName,
                 ScopeID = d.ScopeID
             };
+
+
+ m_log.Warn(
+                    $"[USER ACCOUNT SERVICE]: DisplayName for {d.FirstName} {d.LastName} is {d.DisplayName}");
+
             if (d.Data.TryGetValue("Email", out string value) && value != null)
                 u.Email = value;
             else
                 u.Email = string.Empty;
+
+/*
+
+            if (d.Data.TryGetValue("DisplayName", out string valuedn) && valuedn != null)
+                u.DisplayName = valuedn;
+            else
+                u.DisplayName = string.Empty;
+*/
+
             u.Created = Convert.ToInt32(d.Data["Created"].ToString());
             if (d.Data.TryGetValue("UserTitle", out string valueut) && valueut != null)
                 u.UserTitle = valueut;

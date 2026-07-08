@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `UserAccounts` (
   `ScopeID` char(36) NOT NULL,
   `FirstName` varchar(64) NOT NULL,
   `LastName` varchar(64) NOT NULL,
+  `DisplayName` varchar(64) NOT NULL,
   `Email` varchar(64) DEFAULT NULL,
   `ServiceURLs` text,
   `Created` int(11) DEFAULT NULL,

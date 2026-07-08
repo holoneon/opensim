@@ -464,6 +464,7 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
                         userdata.Id = id;
                         userdata.FirstName = uac.FirstName;
                         userdata.LastName = uac.LastName;
+			userdata.DisplayName = uac.DisplayName;
                         userdata.HomeURL = string.Empty;
                         userdata.IsUnknownUser = false;
                         userdata.IsLocal = true;
@@ -595,6 +596,7 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
                         userdata.Id = id;
                         userdata.FirstName = uac.FirstName;
                         userdata.LastName = uac.LastName;
+			userdata.DisplayName = uac.DisplayName;
                         userdata.HomeURL = string.Empty;
                         userdata.IsUnknownUser = false;
                         userdata.IsLocal = true;
@@ -716,6 +718,15 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
                         userdata.IsUnknownUser = false;
                         userdata.IsLocal = true;
                         userdata.HasGridUserTried = true;
+
+userdata.DisplayName = string.IsNullOrWhiteSpace(uac.DisplayName)
+    ? string.Empty
+    : uac.DisplayName.Trim();
+
+m_log.WarnFormat(
+    "[USER MANAGEMENT MODULE]: UserData DisplayName='{0}' for {1} {2}",
+    userdata.DisplayName, userdata.FirstName, userdata.LastName);
+
                         m_userCacheByID.Add(id, userdata, 1800000);
 
                         ret.Add(userdata);
@@ -1015,6 +1026,7 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
                 {
                     userdata.FirstName = account.FirstName;
                     userdata.LastName = account.LastName;
+                    userdata.DisplayName = account.DisplayName;
                     userdata.HomeURL = string.Empty;
                     userdata.IsUnknownUser = false;
                     userdata.IsLocal = true;

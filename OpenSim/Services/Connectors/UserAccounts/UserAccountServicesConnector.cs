@@ -161,6 +161,8 @@ namespace OpenSim.Services.Connectors
                     m_log.DebugFormat("[ACCOUNT CONNECTOR]: GetUserAccounts received null or empty reply");
                     return null;
                 }
+
+		m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw account(s) reply = {0}", reply);
             }
             catch (Exception e)
             {
@@ -185,6 +187,11 @@ namespace OpenSim.Services.Connectors
                     if (acc is Dictionary<string, object>)
                     {
                         UserAccount pinfo = new UserAccount((Dictionary<string, object>)acc);
+			m_log.WarnFormat(
+                            "[ACCOUNT CONNECTOR]: {0} {1} DisplayName='{2}'",
+                            pinfo.FirstName,
+                            pinfo.LastName,
+                            pinfo.DisplayName);
                         accounts.Add(pinfo);
                     }
                     else
@@ -198,25 +205,28 @@ namespace OpenSim.Services.Connectors
             return accounts;
         }
 
-        public virtual List<UserAccount> GetUserAccounts(UUID scopeID, List<string> IDs)
+public virtual List<UserAccount> GetUserAccounts(UUID scopeID, List<string> IDs)
+{
+    List<UserAccount> accs = doGetMultiUserAccounts(scopeID, IDs, out bool multisuported);
+
+    if (multisuported && accs != null && accs.Count > 0)
+        return accs;
+
+    // fallback to single account lookups
+    accs = new List<UserAccount>();
+
+    foreach (string id in IDs)
+    {
+        if (UUID.TryParse(id, out UUID uuid) && !uuid.IsZero())
         {
-            List<UserAccount> accs = new List<UserAccount>();
-            bool multisuported = true;
-            accs = doGetMultiUserAccounts(scopeID, IDs, out multisuported);
-            if(multisuported)
-                return accs;
-
-            // service does not do multi accounts so need to do it one by one
-
-            UUID uuid = UUID.Zero;
-            foreach(string id in IDs)
-            {
-                if(UUID.TryParse(id, out uuid) && !uuid.IsZero())
-                    accs.Add(GetUserAccount(scopeID,uuid));
-            }
-
-            return accs;
+            UserAccount account = GetUserAccount(scopeID, uuid);
+            if (account != null)
+                accs.Add(account);
         }
+    }
+
+    return accs;
+}
 
         private List<UserAccount> doGetMultiUserAccounts(UUID scopeID, List<string> IDs, out bool suported)
         {
@@ -245,6 +255,7 @@ namespace OpenSim.Services.Connectors
                     m_log.DebugFormat("[ACCOUNT CONNECTOR]: GetMultiUserAccounts received null or empty reply");
                     return null;
                 }
+		m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw doGetMultiUserAccounts reply = {0}", reply);
             }
             catch (Exception e)
             {
@@ -276,6 +287,13 @@ namespace OpenSim.Services.Connectors
                     if (acc is Dictionary<string, object>)
                     {
                         UserAccount pinfo = new UserAccount((Dictionary<string, object>)acc);
+
+                        m_log.WarnFormat(
+                            "[ACCOUNT CONNECTOR]: {0} {1} DisplayName='{2}'",
+                            pinfo.FirstName,
+                            pinfo.LastName,
+                            pinfo.DisplayName);
+
                         accounts.Add(pinfo);
                     }
                     else
@@ -368,6 +386,9 @@ namespace OpenSim.Services.Connectors
                     m_log.DebugFormat("[ACCOUNT CONNECTOR]: GetUserAccount received null or empty reply");
                     return null;
                 }
+
+m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw SendAndGetReply account reply = {0}", reply);
+
             }
             catch (Exception e)
             {
@@ -382,6 +403,11 @@ namespace OpenSim.Services.Connectors
                 if (replyData["result"] is Dictionary<string, object>)
                 {
                     account = new UserAccount((Dictionary<string, object>)replyData["result"]);
+
+m_log.WarnFormat(
+    "[ACCOUNT CONNECTOR]: parsed DisplayName='{0}' for {1} {2}",
+    account.DisplayName, account.FirstName, account.LastName);
+
                 }
             }
 

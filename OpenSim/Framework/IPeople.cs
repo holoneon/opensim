@@ -36,6 +36,7 @@ namespace OpenSim.Framework
         public UUID Id;
         public string FirstName;
         public string LastName;
+        public string DisplayName;
         public string HomeURL;
         public Dictionary<string, object> ServerURLs;
         public bool IsUnknownUser;

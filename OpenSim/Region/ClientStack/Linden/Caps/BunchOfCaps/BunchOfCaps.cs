@@ -2200,6 +2200,12 @@ namespace OpenSim.Region.ClientStack.Linden
 
         public void GetDisplayNames(IOSHttpRequest httpRequest, IOSHttpResponse httpResponse)
         {
+
+/*
+            private static readonly ILog m_log =
+                LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+*/
+
             if (httpRequest.HttpMethod != "GET")
             {
                 httpResponse.StatusCode = (int)HttpStatusCode.NotFound;
@@ -2245,19 +2251,26 @@ namespace OpenSim.Region.ClientStack.Linden
                     foreach (UserData ud in names)
                     {
                         // dont tell about unknown users, we can't send them back on Bad either
-                        if (string.IsNullOrEmpty(ud.FirstName) || ud.FirstName.Equals("Unkown"))
+                        if (string.IsNullOrEmpty(ud.FirstName) || ud.FirstName.Equals("Unknown"))
                             continue;
 
                         string fullname = ud.FirstName + " " + ud.LastName;
+                        string displayName = string.IsNullOrWhiteSpace(ud.DisplayName)
+                            ? fullname
+                            : ud.DisplayName.Trim();
+
+            m_log.DebugFormat(
+                "[CAPS]: DisplayName {0}", displayName);
+
                         LLSDxmlEncode2.AddMap(lsl);
                         LLSDxmlEncode2.AddElem("username", fullname, lsl);
-                        LLSDxmlEncode2.AddElem("display_name", fullname, lsl);
+                        LLSDxmlEncode2.AddElem("display_name", displayName, lsl);
                         LLSDxmlEncode2.AddElem("display_name_next_update", DateTime.UtcNow.AddDays(8), lsl);
                         LLSDxmlEncode2.AddElem("display_name_expires", DateTime.UtcNow.AddMonths(1), lsl);
                         LLSDxmlEncode2.AddElem("legacy_first_name", ud.FirstName, lsl);
                         LLSDxmlEncode2.AddElem("legacy_last_name", ud.LastName, lsl);
                         LLSDxmlEncode2.AddElem("id", ud.Id, lsl);
-                        LLSDxmlEncode2.AddElem("is_display_name_default", true, lsl);
+                        LLSDxmlEncode2.AddElem("is_display_name_default", displayName == fullname, lsl);
                         LLSDxmlEncode2.AddEndMap(lsl);
                     }
                     LLSDxmlEncode2.AddEndArray(lsl);
