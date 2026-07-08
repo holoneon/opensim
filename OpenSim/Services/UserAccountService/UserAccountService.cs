@@ -628,6 +628,7 @@ namespace OpenSim.Services.UserAccountService
                     ["AssetServerURI"] = string.Empty
                 };
             }
+            account.DisplayName = "";
 
             if (!StoreUserAccount(account))
             {
