@@ -172,7 +172,7 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
                 m_regionGlobalX = scene.RegionInfo.WorldLocX;
                 m_regionGlobalY = scene.RegionInfo.WorldLocY;
                 m_regionSizeX = scene.RegionInfo.RegionSizeX;
-                m_regionSizeY = scene.RegionInfo.RegionSizeX;
+                m_regionSizeY = scene.RegionInfo.RegionSizeY;
                 m_regionName = scene.RegionInfo.RegionName;
 
                 m_scene.RegisterModuleInterface<IWorldMapModule>(this);
