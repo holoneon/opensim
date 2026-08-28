@@ -1,0 +1,324 @@
+=== System.Drawing imports ===
+OpenSim/Data/Tests/RegionTests.cs:30:using System.Drawing;
+OpenSim/Data/Tests/PropertyCompareConstraint.cs:31:using System.Drawing;
+OpenSim/Data/MySQL/MySQLSimulationData.cs:31:using System.Drawing;
+OpenSim/Data/SQLite/SQLiteSimulationData.cs:31:using System.Drawing;
+OpenSim/Data/PGSQL/PGSQLSimulationData.cs:31:using System.Drawing;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:29:using System.Drawing;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:30:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/Scripting/LoadImageURL/LoadImageURLModule.cs:29:using System.Drawing;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:31:using System.Drawing;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:32:using System.Drawing.Imaging;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:31:using System.Drawing;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:32:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:30:using System.Drawing;
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:31:using System.Drawing.Drawing2D;
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:32:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTexture.cs:29:using System.Drawing;
+OpenSim/Region/PhysicsModules/ubOdeMeshing/SculptMesh.cs:32:using System.Drawing;
+OpenSim/Region/PhysicsModules/ubOdeMeshing/Meshmerizer.cs:38:using System.Drawing;
+OpenSim/Region/PhysicsModules/ubOdeMeshing/SculptMap.cs:31:using System.Drawing;
+OpenSim/Region/PhysicsModules/ubOdeMeshing/SculptMap.cs:32:using System.Drawing.Imaging;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMesh.cs:37:using System.Drawing;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMesh.cs:38:using System.Drawing.Imaging;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/Meshmerizer.cs:39:using System.Drawing;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/Meshmerizer.cs:40:using System.Drawing.Imaging;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMap.cs:36:using System.Drawing;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMap.cs:37:using System.Drawing.Imaging;
+OpenSim/Framework/Util.cs:33:using System.Drawing;
+OpenSim/Framework/Util.cs:34:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:30:using System.Drawing;
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:31:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:30:using System.Drawing;
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:31:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:32:using System.Drawing;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:33:using System.Drawing.Imaging;
+OpenSim/Services/Connectors/Hypergrid/GatekeeperServiceConnector.cs:31:using System.Drawing;
+OpenSim/Services/MapImageService/MapImageService.cs:39:using System.Drawing;
+OpenSim/Services/MapImageService/MapImageService.cs:40:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:30:using System.Drawing;
+OpenSim/Region/CoreModules/World/LegacyMap/ShadedMapTileRenderer.cs:29:using System.Drawing;
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:30:using System.Drawing;
+OpenSim/Region/CoreModules/World/LegacyMap/IMapTileTerrainRenderer.cs:28:using System.Drawing;
+OpenSim/Region/CoreModules/World/Archiver/ArchiveScenesGroup.cs:34:using System.Drawing;
+OpenSim/Region/CoreModules/World/Archiver/DearchiveScenesGroup.cs:34:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:29:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:30:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GIF.cs:28:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GIF.cs:29:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/PNG.cs:28:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/PNG.cs:29:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/TIFF.cs:30:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/BMP.cs:28:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/BMP.cs:29:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:29:using System.Drawing;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:30:using System.Drawing.Imaging;
+OpenSim/Region/OptionalModules/World/WorldView/WorldViewModule.cs:30:using System.Drawing;
+OpenSim/Region/OptionalModules/World/WorldView/WorldViewModule.cs:31:using System.Drawing.Imaging;
+OpenSim/Region/Framework/Interfaces/IJ2KDecoder.cs:28:using System.Drawing;
+OpenSim/Region/Framework/Interfaces/IDynamicTextureManager.cs:29:using System.Drawing;
+OpenSim/Region/Framework/Interfaces/IMapImageUploadModule.cs:30:using System.Drawing;
+OpenSim/Region/Framework/Scenes/Serialization/SceneObjectSerializer.cs:31:using System.Drawing;
+OpenSim/Region/Framework/Scenes/Serialization/CoalescedSceneObjectsSerializer.cs:30:using System.Drawing;
+OpenSim/Region/Framework/Scenes/SceneObjectPart.cs:30:using System.Drawing;
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/LSL_Api.cs:52:using System.Drawing;
+OpenSim/Region/CoreModules/ServiceConnectorsOut/MapImage/MapImageServiceModule.cs:34:using System.Drawing;
+OpenSim/Region/CoreModules/ServiceConnectorsOut/MapImage/MapImageServiceModule.cs:35:using System.Drawing.Imaging;
+OpenSim/Region/Framework/Scenes/SceneObjectGroup.cs:36:using System.Drawing;
+OpenSim/Region/CoreModules/Agent/TextureSender/J2KDecoderModule.cs:30:using System.Drawing;
+
+=== Fully-qualified references ===
+OpenSim/Server/ServerMain.cs:145:            // temporay set the platform dependent System.Drawing.Common.dll
+OpenSim/Server/ServerMain.cs:147:                        "System.Drawing.Common.dll");
+OpenSim/Server/ServerMain.cs:163:                m_log.Error("Failed to copy System.Drawing.Common.dll for current platform" + e.Message);
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:32:using System.Drawing.Imaging;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:306:                // Decode image to System.Drawing.Image
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:32:using System.Drawing.Imaging;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:333:                // Decode image to System.Drawing.Image
+OpenSim/Framework/Util.cs:34:using System.Drawing.Imaging;
+OpenSim/Framework/Util.cs:4877:                atrib.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+OpenSim/Framework/Util.cs:4878:                graphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+OpenSim/Framework/Util.cs:4879:                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+OpenSim/Framework/Util.cs:4880:                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+OpenSim/Framework/Util.cs:4881:                graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+OpenSim/Services/MapImageService/MapImageService.cs:40:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:30:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:440:        private void CairoDraw(string data, System.Drawing.Graphics graph)
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:741:                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:744:                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.RoundAnchor;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:747:                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.DiamondAnchor;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:750:                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.Flat;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:759:                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:762:                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.RoundAnchor;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:765:                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.DiamondAnchor;
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:768:                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.Flat;
+OpenSim/Region/Framework/Interfaces/ITerrain.cs:77:        System.Drawing.Bitmap CreateMapTile();
+OpenSim/Region/Framework/Interfaces/ITerrain.cs:78:        System.Drawing.Bitmap CreateViewImage(Vector3 camPos, Vector3 camDir, float fov, int width, int height, bool useTextures);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:31:using System.Drawing.Drawing2D;
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:32:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:31:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:31:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:33:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1203:                    // Decode image to System.Drawing.Image
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1319:            gatrib.SetWrapMode(System.Drawing.Drawing2D.WrapMode.TileFlipXY);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1322:            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1323:            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1324:            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1325:            g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+OpenSim/Region/CoreModules/ServiceConnectorsOut/MapImage/MapImageServiceModule.cs:35:using System.Drawing.Imaging;
+OpenSim/Region/PhysicsModules/ubOdeMeshing/SculptMap.cs:32:using System.Drawing.Imaging;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMesh.cs:38:using System.Drawing.Imaging;
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/Meshmerizer.cs:40:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:161:            m_color_water = System.Drawing.ColorTranslator.FromHtml(Util.GetConfigVarFromSections<string>(m_config, "MapColorWater", configSections, "#1D475F"));
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:162:            m_color_1 = System.Drawing.ColorTranslator.FromHtml(Util.GetConfigVarFromSections<string>(m_config, "MapColor1", configSections, "#A58976"));
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:163:            m_color_2 = System.Drawing.ColorTranslator.FromHtml(Util.GetConfigVarFromSections<string>(m_config, "MapColor2", configSections, "#455931"));
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:164:            m_color_3 = System.Drawing.ColorTranslator.FromHtml(Util.GetConfigVarFromSections<string>(m_config, "MapColor3", configSections, "#A29A8D"));
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:165:            m_color_4 = System.Drawing.ColorTranslator.FromHtml(Util.GetConfigVarFromSections<string>(m_config, "MapColor4", configSections, "#C8C8C8"));
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMap.cs:37:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/LegacyMap/ShadedMapTileRenderer.cs:54:            m_color_water = System.Drawing.ColorTranslator.FromHtml(Util.GetConfigVarFromSections<string>(m_config, "MapColorWater", configSections, "#1D475F"));
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:108:                                            System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:131:                        //mapbmp = new Bitmap((int)m_scene.Heightmap.Width, (int)m_scene.Heightmap.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+OpenSim/Region/OptionalModules/World/WorldView/WorldViewModule.cs:31:using System.Drawing.Imaging;
+OpenSim/Region/Application/Application.cs:79:            AppContext.SetSwitch("System.Drawing.EnableUnixSupport", true);
+OpenSim/Region/Application/Application.cs:82:            // pre load System.Drawing.Common.dll for the platform
+OpenSim/Region/Application/Application.cs:85:                        (Util.IsWindows() ? "win" : "linux"), "System.Drawing.Common.dll");
+OpenSim/Region/Application/Application.cs:92:                m_log.Error("Failed to load System.Drawing.Common.dll for current platform" + e.Message);
+OpenSim/Region/Application/Application.cs:97:                        "System.Drawing.Common.dll");
+OpenSim/Region/Application/Application.cs:113:                m_log.Error("Failed to copy System.Drawing.Common.dll for current platform" + e.Message);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:30:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GIF.cs:29:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/PNG.cs:29:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/BMP.cs:29:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:30:using System.Drawing.Imaging;
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:221:        /// <returns>A System.Drawing.Bitmap containing a grayscale image</returns>
+OpenSim/Region/ScriptEngine/YEngine/XMRInstAbstract.cs:1398:            System.Drawing.FontFamily[] families = System.Drawing.FontFamily.Families;
+
+=== Graphics and bitmap operations ===
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:121:        public void GetDrawStringSize(string text, string fontName, int fontSize,
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:130:                    stringSize = m_graph.MeasureString(text, myFont);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:156:                    Bitmap bitmap = new Bitmap(32, 32, PixelFormat.Format32bppArgb);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:157:                    m_graph = Graphics.FromImage(bitmap);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:371:                        bitmap = new Bitmap(width, height, PixelFormat.Format32bppRgb);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:372:                        graph = Graphics.FromImage(bitmap);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:378:                        bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:379:                        graph = Graphics.FromImage(bitmap);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:522:                            graph.DrawString(nextLine, myFont, myBrush, startPoint);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:588:                                graph.DrawImage(image, (float)startPoint.X, (float)startPoint.Y, x, y);
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:594:                                    graph.DrawString("URL couldn't be resolved or is", errorFont,
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:596:                                    graph.DrawString("not an image. Please check URL.", errorFont,
+OpenSim/Region/CoreModules/Scripting/VectorRender/VectorRenderModule.cs:879:                            Bitmap image = new Bitmap(s);
+OpenSim/Region/CoreModules/Scripting/LoadImageURL/LoadImageURLModule.cs:99:        public void GetDrawStringSize(string text, string fontName, int fontSize,
+OpenSim/Region/CoreModules/Scripting/LoadImageURL/LoadImageURLModule.cs:212:                            using(Bitmap image = new Bitmap(stream))
+OpenSim/Region/CoreModules/Scripting/LoadImageURL/LoadImageURLModule.cs:248:                                    using(Bitmap resize = new Bitmap(image, newSize))
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:320:        public void GetDrawStringSize(string contentType, string text, string fontName, int fontSize,
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:327:                RenderPlugins[contentType].GetDrawStringSize(text, fontName, fontSize, out xSize, out ySize);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:565:                Bitmap image1 = new Bitmap(image);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:593:                Bitmap image2 = new Bitmap(image);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:631:                joint = new Bitmap(Width, Height, format);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:635:                    using (jG = Graphics.FromImage(joint))
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:640:                        jG.DrawImage(back, 0, 0, Width, Height);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:643:                        jG.DrawImage(front, 0, 0, Width, Height);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:648:                using (jG = Graphics.FromImage(joint))
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:652:                    jG.DrawImage(back, 0, 0, Width, Height);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:667:                        jG.DrawImage(front, new Rectangle(0, 0, Width, Height), 0, 0, front.Width, front.Height, GraphicsUnit.Pixel, imageAttributes);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:678:                Bitmap joint = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:691:                    using (Graphics jG = Graphics.FromImage(joint))
+OpenSim/Region/CoreModules/Scripting/DynamicTexture/DynamicTextureModule.cs:695:                        jG.DrawImage(b, new Rectangle(0, 0, Width, Height), 0, 0, Width, Height, GraphicsUnit.Pixel, imageAttributes);
+OpenSim/Region/PhysicsModules/ubOdeMeshing/SculptMap.cs:168:            Bitmap scaledImage = new Bitmap(destWidth, destHeight, PixelFormat.Format24bppRgb);
+OpenSim/Framework/Util.cs:4875:            using (Graphics graphics = Graphics.FromImage(result))
+OpenSim/Framework/Util.cs:4883:                graphics.DrawImage(image, new Rectangle(0, 0, result.Width, result.Height),
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMesh.cs:59:            Bitmap bitmap = (Bitmap)Bitmap.FromFile(fileName);
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMesh.cs:68:            Bitmap bitmap = (Bitmap)Bitmap.FromFile(fileName);
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/Meshmerizer.cs:646:                        idata = Image.FromFile(decodedSculptFileName);
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/Meshmerizer.cs:687:                        try { idata.Save(decodedSculptFileName, ImageFormat.MemoryBmp); }
+OpenSim/Region/PhysicsModules/Meshing/Meshmerizer/SculptMap.cs:165:            Bitmap scaledImage = new Bitmap(destWidth, destHeight, PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:125:                                    detailTexture[i] = (Bitmap)Image.FromStream(stream);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:172:                                    detailTexture[i].Save(stream, ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:214:                        BitmapData bmdata = detailTexture[t].LockBits(new Rectangle(0, 0, 16, 16),
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:251:                            detailTexture[i] = new Bitmap(16, 16, PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:252:                            using(Graphics gfx = Graphics.FromImage(detailTexture[i]))
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:266:                        //detailTexture[i].Save("terr" + i.ToString()+".png", ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:289:            Bitmap output = new Bitmap(twidth, theight, PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:290:            BitmapData outputData = output.LockBits(new Rectangle(0, 0, twidth, theight), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:367:                        detailTexture[0].LockBits(new Rectangle(0, 0, 16, 16), ImageLockMode.ReadOnly, detailTexture[0].PixelFormat),
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:368:                        detailTexture[1].LockBits(new Rectangle(0, 0, 16, 16), ImageLockMode.ReadOnly, detailTexture[1].PixelFormat),
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:369:                        detailTexture[2].LockBits(new Rectangle(0, 0, 16, 16), ImageLockMode.ReadOnly, detailTexture[2].PixelFormat),
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:370:                        detailTexture[3].LockBits(new Rectangle(0, 0, 16, 16), ImageLockMode.ReadOnly, detailTexture[3].PixelFormat)
+OpenSim/Region/CoreModules/World/Warp3DMap/TerrainSplat.cs:431://output.Save("terr.jpg",ImageFormat.Jpeg);
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:212:            tile.Save(filename,ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:245:                return new Bitmap(viewWidth, viewHeight);
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:527:                                //sculpt.Save("lixo12-"+prim.UUID.ToString()+".png",ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:768:                        //img.Save("lixo"+id.ToString()+".png",ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Warp3DMap/Warp3DImageModule.cs:843:                    BitmapData bitmapData = bitmap.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.ReadOnly, bitmap.PixelFormat);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1185:                Bitmap mapTexture = new Bitmap(1, 1);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1207:                        mapTexture = new Bitmap(image);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1259:        private static ImageCodecInfo GetEncoderInfo(String mimeType)
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1261:            ImageCodecInfo[] encoders;
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1262:            encoders = ImageCodecInfo.GetImageEncoders();
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1317:            Bitmap mapTexture = new Bitmap(spanX, spanY);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1321:            Graphics g = Graphics.FromImage(mapTexture);           
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1344:                using(Image localMap = Bitmap.FromFile(filename))
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1351:                    g.DrawImage(localMap,new Rectangle(x, spanY - y - sy, sx, sy),
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1356:                        SizeF stringSize = g.MeasureString(m_regionName, drawFont);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1357:                        g.DrawString(m_regionName, drawFont, drawBrush, x + 30, spanY - y - 30 - stringSize.Height);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1388:                        g.DrawImage(image,new Rectangle(x, spanY - y - sy, sx, sy),
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1393:                            SizeF stringSize = g.MeasureString(r.RegionName, drawFont);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1394:                            g.DrawString(r.RegionName, drawFont, drawBrush, x + 30, spanY - y - 30 - stringSize.Height);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1407:                g.DrawString(drawString, drawFont, drawBrush, 30, 30);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1415:            mapTexture.Save(exportPath, ImageFormat.Jpeg);
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1753:            using (Bitmap overlay = new Bitmap(regionSizeX, regionSizeY))
+OpenSim/Region/CoreModules/World/WorldMap/WorldMapModule.cs:1757:                using (Graphics g = Graphics.FromImage(overlay))
+OpenSim/Services/Connectors/Hypergrid/GatekeeperServiceConnector.cs:191:                using (Bitmap bitmap = new Bitmap(filename))
+OpenSim/Services/MapImageService/MapImageService.cs:82:                        m_WaterBitmap = new Bitmap(IMAGE_WIDTH, IMAGE_WIDTH, PixelFormat.Format24bppRgb);
+OpenSim/Services/MapImageService/MapImageService.cs:86:                            m_WaterBitmap.Save(ms, ImageFormat.Jpeg);
+OpenSim/Services/MapImageService/MapImageService.cs:249:                        Bitmap bm = new Bitmap(fileName);
+OpenSim/Services/MapImageService/MapImageService.cs:274:                    return File.Exists(fileName) ? new Bitmap(fileName) : new Bitmap(IMAGE_WIDTH, IMAGE_WIDTH, PixelFormat.Format24bppRgb);
+OpenSim/Services/MapImageService/MapImageService.cs:335:                        output.Save(outputFile, ImageFormat.Jpeg);
+OpenSim/Services/MapImageService/MapImageService.cs:351:            BitmapData srcData = bm.LockBits(new Rectangle(0, 0, bm.Width, bm.Height), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+OpenSim/Services/MapImageService/MapImageService.cs:375:                BitmapData srcData = input.LockBits(new Rectangle(0, 0, input.Width, input.Height), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+OpenSim/Services/MapImageService/MapImageService.cs:376:                BitmapData dstData = output.LockBits(new Rectangle(0, 0, output.Width, output.Height), ImageLockMode.ReadWrite, PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/LegacyMap/TexturedMapTileRenderer.cs:194:                    return new Bitmap(image);
+OpenSim/Region/ScriptEngine/Shared/Api/Runtime/OSSL_Stub.cs:538:        public string osDrawImage(string drawList, int width, int height, string imageUrl)
+OpenSim/Region/ScriptEngine/Shared/Api/Runtime/OSSL_Stub.cs:540:            return m_OSSL_Functions.osDrawImage(drawList, width, height, imageUrl);
+OpenSim/Region/ScriptEngine/Shared/Api/Runtime/OSSL_Stub.cs:544:        public vector osGetDrawStringSize(string contentType, string text, string fontName, int fontSize)
+OpenSim/Region/ScriptEngine/Shared/Api/Runtime/OSSL_Stub.cs:546:            return m_OSSL_Functions.osGetDrawStringSize(contentType, text, fontName, fontSize);
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:107:                    mapbmp = new Bitmap((int)m_scene.Heightmap.Width, (int)m_scene.Heightmap.Height,
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:124:                        mapbmp = new Bitmap(m_scene.RegionInfo.MaptileStaticFile);
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:131:                        //mapbmp = new Bitmap((int)m_scene.Heightmap.Width, (int)m_scene.Heightmap.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:277:                    return new Bitmap(image);
+OpenSim/Region/CoreModules/World/LegacyMap/MapImageModule.cs:606:                    using (Graphics g = Graphics.FromImage(mapbmp))
+OpenSim/Region/OptionalModules/World/WorldView/WorldViewModule.cs:122:                    bmp.Save(str, ImageFormat.Jpeg);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:68:                colours.Save(filename,ImageFormat.Jpeg);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:79:                colours.Save(stream,ImageFormat.Jpeg);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:114:            using (Bitmap gradientmapLd = new Bitmap("defaultstripe.png"))
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/JPEG.cs:118:                bmp = new Bitmap(map.Width, map.Height);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GIF.cs:44:                colours.Save(filename,ImageFormat.Gif);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GIF.cs:55:                colours.Save(stream,ImageFormat.Gif);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/PNG.cs:45:                colours.Save(filename,ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/PNG.cs:56:                colours.Save(stream,ImageFormat.Png);
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OSSL_Api.cs:1489:        public string osDrawImage(string drawList, int width, int height, string imageUrl)
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OSSL_Api.cs:1497:        public LSL_Vector osGetDrawStringSize(string contentType, string text, string fontName, int fontSize)
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OSSL_Api.cs:1504:                textureManager.GetDrawStringSize(contentType, text, fontName, fontSize,
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/BMP.cs:56:                colours.Save(filename,ImageFormat.Bmp);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/BMP.cs:67:                colours.Save(stream,ImageFormat.Bmp);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:67:            using(Bitmap b = new Bitmap(filename))
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:73:            using (Bitmap bitmap = new Bitmap(filename))
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:91:            using (Bitmap b = new Bitmap(stream))
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:120:                colours.Save(filename,ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:131:                colours.Save(stream,ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:153:                    existingBitmap = new Bitmap(tempName);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:157:                        newBitmap = new Bitmap(fileWidth * regionSizeX, fileHeight * regionSizeY);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:166:                    newBitmap = new Bitmap(fileWidth * regionSizeX, fileHeight * regionSizeY);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:195:            bmp.Save(filename, ImageFormat.Png);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:224:            //            Bitmap bmp = new Bitmap(map.Width, map.Height, PixelFormat.Format24bppRgb);
+OpenSim/Region/CoreModules/World/Terrain/FileLoaders/GenericSystemDrawing.cs:225:            Bitmap bmp = new Bitmap(map.Width, map.Height);
+OpenSim/Region/ScriptEngine/Shared/Api/Interface/IOSSL_Api.cs:306:            string osDrawImage(string drawList, int width, int height, string image);
+OpenSim/Region/ScriptEngine/Shared/Api/Interface/IOSSL_Api.cs:308:            vector osGetDrawStringSize(string contentType, string text, string fontName, int fontSize);
+OpenSim/Region/CoreModules/World/Terrain/TerrainModule.cs:664:                catch(BadImageFormatException)
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:310:                    mTexture = new Bitmap(image);
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:317:                        ImageCodecInfo codec = GetEncoderInfo("image/" + format);
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:353:        private static ImageCodecInfo GetEncoderInfo(String mimeType)
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:355:            ImageCodecInfo[] encoders;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureHandler.cs:356:            encoders = ImageCodecInfo.GetImageEncoders();
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:337:                    mTexture = new Bitmap(image);
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:344:                        ImageCodecInfo codec = GetEncoderInfo("image/" + format);
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:381:        private static ImageCodecInfo GetEncoderInfo(String mimeType)
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:383:            ImageCodecInfo[] encoders;
+OpenSim/Capabilities/Handlers/GetTexture/GetTextureRobustHandler.cs:384:            encoders = ImageCodecInfo.GetImageEncoders();
+OpenSim/Region/CoreModules/ServiceConnectorsOut/MapImage/MapImageServiceModule.cs:215:            //     ImageFormat.Jpeg);
+OpenSim/Region/CoreModules/ServiceConnectorsOut/MapImage/MapImageServiceModule.cs:292:                tileImage.Save(stream, ImageFormat.Jpeg);
+OpenSim/Region/Framework/Interfaces/IDynamicTextureManager.cs:110:        void GetDrawStringSize(string contentType, string text, string fontName, int fontSize,
+OpenSim/Region/Framework/Interfaces/IDynamicTextureManager.cs:137:        void GetDrawStringSize(string text, string fontName, int fontSize,
+
+=== Project references ===
+OpenSim/Data/MySQL/OpenSim.Data.MySQL.csproj:93:    <Reference Include="System.Drawing.Common" >
+OpenSim/Data/MySQL/OpenSim.Data.MySQL.csproj:94:      <Name>System.Drawing.Common</Name>
+OpenSim/Data/MySQL/OpenSim.Data.MySQL.csproj:95:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/CoreModules/OpenSim.Region.CoreModules.csproj:123:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/CoreModules/OpenSim.Region.CoreModules.csproj:124:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/CoreModules/OpenSim.Region.CoreModules.csproj:125:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/PhysicsModules/ubOdeMeshing/OpenSim.Region.PhysicsModule.ubOdeMeshing.csproj:97:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/PhysicsModules/ubOdeMeshing/OpenSim.Region.PhysicsModule.ubOdeMeshing.csproj:98:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/PhysicsModules/ubOdeMeshing/OpenSim.Region.PhysicsModule.ubOdeMeshing.csproj:99:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Data/PGSQL/OpenSim.Data.PGSQL.csproj:93:    <Reference Include="System.Drawing.Common" >
+OpenSim/Data/PGSQL/OpenSim.Data.PGSQL.csproj:94:      <Name>System.Drawing.Common</Name>
+OpenSim/Data/PGSQL/OpenSim.Data.PGSQL.csproj:95:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/PhysicsModules/Meshing/OpenSim.Region.PhysicsModule.Meshing.csproj:97:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/PhysicsModules/Meshing/OpenSim.Region.PhysicsModule.Meshing.csproj:98:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/PhysicsModules/Meshing/OpenSim.Region.PhysicsModule.Meshing.csproj:99:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Services/Connectors/OpenSim.Services.Connectors.csproj:92:    <Reference Include="System.Drawing.Common" >
+OpenSim/Services/Connectors/OpenSim.Services.Connectors.csproj:93:      <Name>System.Drawing.Common</Name>
+OpenSim/Services/Connectors/OpenSim.Services.Connectors.csproj:94:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/OptionalModules/OpenSim.Region.OptionalModules.csproj:113:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/OptionalModules/OpenSim.Region.OptionalModules.csproj:114:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/OptionalModules/OpenSim.Region.OptionalModules.csproj:115:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Services/SimulationService/OpenSim.Services.SimulationService.csproj:82:    <Reference Include="System.Drawing.Common" >
+OpenSim/Services/SimulationService/OpenSim.Services.SimulationService.csproj:83:      <Name>System.Drawing.Common</Name>
+OpenSim/Services/SimulationService/OpenSim.Services.SimulationService.csproj:84:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Services/MapImageService/OpenSim.Services.MapImageService.csproj:82:    <Reference Include="System.Drawing.Common" >
+OpenSim/Services/MapImageService/OpenSim.Services.MapImageService.csproj:83:      <Name>System.Drawing.Common</Name>
+OpenSim/Services/MapImageService/OpenSim.Services.MapImageService.csproj:84:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/Framework/OpenSim.Region.Framework.csproj:93:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/Framework/OpenSim.Region.Framework.csproj:94:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/Framework/OpenSim.Region.Framework.csproj:95:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Capabilities/Handlers/OpenSim.Capabilities.Handlers.csproj:93:    <Reference Include="System.Drawing.Common" >
+OpenSim/Capabilities/Handlers/OpenSim.Capabilities.Handlers.csproj:94:      <Name>System.Drawing.Common</Name>
+OpenSim/Capabilities/Handlers/OpenSim.Capabilities.Handlers.csproj:95:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Data/SQLite/OpenSim.Data.SQLite.csproj:93:    <Reference Include="System.Drawing.Common" >
+OpenSim/Data/SQLite/OpenSim.Data.SQLite.csproj:94:      <Name>System.Drawing.Common</Name>
+OpenSim/Data/SQLite/OpenSim.Data.SQLite.csproj:95:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OpenSim.Region.ScriptEngine.Shared.Api.csproj:87:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OpenSim.Region.ScriptEngine.Shared.Api.csproj:88:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OpenSim.Region.ScriptEngine.Shared.Api.csproj:89:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/ClientStack/Linden/UDP/OpenSim.Region.ClientStack.LindenUDP.csproj:103:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/ClientStack/Linden/UDP/OpenSim.Region.ClientStack.LindenUDP.csproj:104:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/ClientStack/Linden/UDP/OpenSim.Region.ClientStack.LindenUDP.csproj:105:      <HintPath>../../../../../bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/ScriptEngine/YEngine/OpenSim.Region.ScriptEngine.YEngine.csproj:92:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/ScriptEngine/YEngine/OpenSim.Region.ScriptEngine.YEngine.csproj:93:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/ScriptEngine/YEngine/OpenSim.Region.ScriptEngine.YEngine.csproj:94:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Region/ClientStack/Linden/Caps/OpenSim.Region.ClientStack.LindenCaps.csproj:93:    <Reference Include="System.Drawing.Common" >
+OpenSim/Region/ClientStack/Linden/Caps/OpenSim.Region.ClientStack.LindenCaps.csproj:94:      <Name>System.Drawing.Common</Name>
+OpenSim/Region/ClientStack/Linden/Caps/OpenSim.Region.ClientStack.LindenCaps.csproj:95:      <HintPath>/opt/opensim/bin/System.Drawing.Common.dll</HintPath>
+OpenSim/Framework/OpenSim.Framework.csproj:103:    <Reference Include="System.Drawing.Common" >
+OpenSim/Framework/OpenSim.Framework.csproj:104:      <Name>System.Drawing.Common</Name>
+OpenSim/Framework/OpenSim.Framework.csproj:105:      <HintPath>../../bin/System.Drawing.Common.dll</HintPath>

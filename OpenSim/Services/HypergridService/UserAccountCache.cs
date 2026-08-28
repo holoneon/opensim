@@ -11,7 +11,7 @@ namespace OpenSim.Services.HypergridService
 {
     public class UserAccountCache : IUserAccountService
     {
-        private const double CACHE_EXPIRATION_SECONDS = 120000.0; // 33 hours!
+        private const double CACHE_EXPIRATION_SECONDS = 1800.0; // 33 minutes
 
 //        private static readonly ILog m_log =
 //                LogManager.GetLogger(

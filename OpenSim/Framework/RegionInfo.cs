@@ -68,6 +68,9 @@ namespace OpenSim.Framework
         public UUID lastMapUUID = UUID.Zero;
         public string lastMapRefresh = "0";
 
+	// add Fiona Sweet
+	public bool PrivatePresence { get; private set; } = false;
+
         private float m_nonphysPrimMin = 0;
         private int m_nonphysPrimMax = 0;
         private float m_physPrimMin = 0;
@@ -614,6 +617,14 @@ namespace OpenSim.Framework
             m_regionType = config.GetString("RegionType", String.Empty);
             allKeys.Remove("RegionType");
 
+            // add Fiona Sweet
+            // Hide avatar presence from users outside this region
+            PrivatePresence = config.GetBoolean("PrivatePresence", false);
+            if (PrivatePresence)
+               m_log.InfoFormat("[REGIONINFO]: region {0} is PRIVATE", name);
+
+            allKeys.Remove("PrivatePresence");
+
             // Get Default Landing Location (Defaults to 128,128)
             string temp_location = config.GetString("DefaultLanding", "<128, 128, 30>");
             Vector3 temp_vector;
@@ -839,6 +850,9 @@ namespace OpenSim.Framework
 
             if (RegionType != String.Empty)
                 config.Set("RegionType", RegionType);
+
+            // add Fiona Sweet
+            config.Set("PrivatePresence", PrivatePresence);
 
             if (!m_maptileStaticUUID.IsZero())
                 config.Set("MaptileStaticUUID", m_maptileStaticUUID.ToString());

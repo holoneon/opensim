@@ -205,14 +205,6 @@ namespace OpenSim.Services.UserAccountService
             else
                 u.Email = string.Empty;
 
-/*
-
-            if (d.Data.TryGetValue("DisplayName", out string valuedn) && valuedn != null)
-                u.DisplayName = valuedn;
-            else
-                u.DisplayName = string.Empty;
-*/
-
             u.Created = Convert.ToInt32(d.Data["Created"].ToString());
             if (d.Data.TryGetValue("UserTitle", out string valueut) && valueut != null)
                 u.UserTitle = valueut;
@@ -320,6 +312,7 @@ namespace OpenSim.Services.UserAccountService
                 FirstName = data.FirstName,
                 LastName = data.LastName,
                 PrincipalID = data.PrincipalID,
+		DisplayName = data.DisplayName,
                 ScopeID = data.ScopeID,
                 Data = new Dictionary<string, string>
                 {

@@ -79,6 +79,10 @@ namespace OpenSim.Region.CoreModules.Avatar.Friends
         protected IFriendsService m_FriendsService = null;
         protected FriendsSimConnector m_FriendsSimConnector;
 
+        // add Fiona Sweet
+        private readonly HashSet<UUID> m_PrivatePresenceAgents = new();
+        private readonly object m_PrivatePresenceLock = new();
+
         /// <summary>
         /// Cache friends lists for users.
         /// </summary>
@@ -316,20 +320,64 @@ namespace OpenSim.Region.CoreModules.Avatar.Friends
                 return null;
         }
 
+        // modified Fiona Sweet add PrivatePresence option to Regions.ini
+
         private void OnMakeRootAgent(ScenePresence sp)
         {
-            if(sp.m_gotCrossUpdate)
-                return;
-
+            bool privatePresence = sp.Scene.RegionInfo.PrivatePresence;
+            bool wasPrivate;
+        
+            lock (m_PrivatePresenceLock)
+            {
+                wasPrivate = m_PrivatePresenceAgents.Contains(sp.UUID);
+        
+                if (privatePresence)
+                    m_PrivatePresenceAgents.Add(sp.UUID);
+                else
+                    m_PrivatePresenceAgents.Remove(sp.UUID);
+            }
+        
             RecacheFriends(sp.ControllingClient);
-
+        
+            if (privatePresence)
+            {
+                /*
+                 * The avatar may already have been reported online before teleporting
+                 * or crossing into this region, so actively report them offline.
+                 *
+                 * Only do this when they actually enter private presence, rather than
+                 * repeating it for every root-agent event inside the private region.
+                 */
+                if (!wasPrivate)
+                    StatusChange(sp.UUID, false);
+        
+                return;
+            }
+        
+            /*
+             * The avatar has just left a private-presence region. Report them online
+             * again even if this root-agent event came from a region crossing.
+             */
+            if (wasPrivate)
+            {
+                StatusChange(sp.UUID, true);
+        
+                lock (m_NeedsToNotifyStatus)
+                    m_NeedsToNotifyStatus.Remove(sp.UUID);
+        
+                return;
+            }
+        
+            /*
+             * Preserve the original crossing behavior for ordinary regions.
+             */
+            if (sp.m_gotCrossUpdate)
+                return;
+        
             lock (m_NeedsToNotifyStatus)
             {
                 if (m_NeedsToNotifyStatus.Remove(sp.UUID))
-                {
-                    // Inform the friends that this user is online. This can only be done once the client is a Root Agent.
                     StatusChange(sp.UUID, true);
-                }
             }
         }
 

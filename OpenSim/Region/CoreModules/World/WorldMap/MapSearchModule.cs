@@ -130,14 +130,10 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
 
                 //m_log.DebugFormat("[MAPSEARCHMODULE]: search {0} returned {1} regions", mapName, regionInfos.Count);
 
-                MapBlockData data;
                 if (regionInfos != null && regionInfos.Count > 0)
                 {
                     foreach (GridRegion info in regionInfos)
                     {
-                        data = new MapBlockData();
-                        data.Agents = 0;
-                        data.Access = info.Access;
                         MapBlockData block = new MapBlockData();
                         MapBlockFromGridRegion(block, info, flags);
 

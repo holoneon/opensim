@@ -76,6 +76,9 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
         private uint m_regionSizeY;
         private string m_regionName;
 
+        // add Fiona Sweet
+        private bool m_privatePresence;
+
         private byte[] myMapImageJPEG;
         protected volatile bool m_Enabled = false;
 
@@ -174,6 +177,7 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
                 m_regionSizeX = scene.RegionInfo.RegionSizeX;
                 m_regionSizeY = scene.RegionInfo.RegionSizeX;
                 m_regionName = scene.RegionInfo.RegionName;
+                m_privatePresence = scene.RegionInfo.PrivatePresence;
 
                 m_scene.RegisterModuleInterface<IWorldMapModule>(this);
 
@@ -418,7 +422,7 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
                     case (int)GridItemType.AgentLocations:
                         // Service 6 right now (MAP_ITEM_AGENTS_LOCATION; green dots)
 
-                        if (m_scene.GetRootAgentCount() <= 1) //own position is not sent
+                        if ((m_scene.GetRootAgentCount() <= 1) || (m_privatePresence))  //own position is not sent
                         {
                             mapitem = new mapItemReply(
                                         m_regionGlobalX + 1,
@@ -541,7 +545,7 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
 
                 // Service 6 right now (MAP_ITEM_AGENTS_LOCATION; green dots)
 
-                if (m_scene.GetRootAgentCount() <= 1) // own is not sent
+                if ((m_scene.GetRootAgentCount() <= 1) || (m_privatePresence)) // own is not sent
                 {
                     mapitem = new mapItemReply(
                                 m_regionGlobalX + 1,
@@ -1440,7 +1444,7 @@ namespace OpenSim.Region.CoreModules.World.WorldMap
             int tc = Environment.TickCount;
             OSD osdhash = OSD.FromString(Util.Md5Hash(m_regionName + tc.ToString()));
 
-            if (m_scene.GetRootAgentCount() == 0)
+            if ((m_scene.GetRootAgentCount() == 0) || (m_privatePresence))
             {
                 OSDMap responsemapdata = new OSDMap();
                 responsemapdata["X"] = OSD.FromInteger((int)(m_regionGlobalX + 1));
