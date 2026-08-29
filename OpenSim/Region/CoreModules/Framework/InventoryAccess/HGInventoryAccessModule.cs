@@ -25,8 +25,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// modified by Fiona Sweet - user configurable My Suitcase functionality using chat commands
-
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -163,10 +161,24 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
             scene.EventManager.OnTeleportStart += TeleportStart;
             scene.EventManager.OnTeleportFail += TeleportFail;
 
+            // Observe chat after ChatModule has accepted it. EventManager
+            // isolates subscriber exceptions, so this command listener cannot
+            // interrupt WorldComm delivery to scripts on any channel.
+            if (m_AllowUserSuitcaseControl)
+                scene.EventManager.OnChatFromClient += OnSuitcaseCommand;
+
             // We're fgoing to enforce some stricter permissions if Outbound is false
             scene.Permissions.OnTakeObject += CanTakeObject;
             scene.Permissions.OnTakeCopyObject += CanTakeObject;
             scene.Permissions.OnTransferUserInventory += OnTransferUserInventory;
+        }
+
+        public override void RemoveRegion(Scene scene)
+        {
+            if (m_AllowUserSuitcaseControl)
+                scene.EventManager.OnChatFromClient -= OnSuitcaseCommand;
+
+            base.RemoveRegion(scene);
         }
 
         #endregion
@@ -177,9 +189,6 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
         {
             base.OnNewClient(client);
             client.OnCompleteMovementToRegion += OnCompleteMovementToRegion;
-
-            if (m_AllowUserSuitcaseControl)
-                client.OnChatFromClient += OnSuitcaseCommand;
         }
 
         private void OnSuitcaseCommand(object sender, OSChatMessage chat)
