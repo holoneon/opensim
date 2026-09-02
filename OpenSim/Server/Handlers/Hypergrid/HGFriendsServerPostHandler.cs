@@ -238,14 +238,15 @@ namespace OpenSim.Server.Handlers.Hypergrid
             }
 
             List<string> friends = new List<string>();
+
+            // don't assume dictionary retains POST key order
             int i = 0;
-            foreach (KeyValuePair<string, object> kvp in request)
+            while (request.TryGetValue("friend_" + i, out object friendObj))
             {
-                if (kvp.Key.Equals("friend_" + i.ToString()))
-                {
-                    friends.Add(kvp.Value.ToString());
-                    i++;
-                }
+                if (friendObj != null)
+                    friends.Add(friendObj.ToString());
+            
+                i++;
             }
 
             List<UUID> onlineFriends = m_TheService.StatusNotification(friends, principalID, online);
