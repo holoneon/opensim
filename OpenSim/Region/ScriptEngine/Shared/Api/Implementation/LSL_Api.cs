@@ -2381,56 +2381,78 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
         /// </summary>
         /// <param name="pos"></param>
         /// <returns>1 if successful, 0 otherwise.</returns>
+// modified by Fiona Sweet to allow scripts to move objects beyond region boundaries.
+// this allows scripted trains, buses, etc to move across regions
+
         public LSL_Integer llSetRegionPos(LSL_Vector pos)
         {
-
-            // BEGIN WORKAROUND
-            // IF YOU GET REGION CROSSINGS WORKING WITH THIS FUNCTION, REPLACE THE WORKAROUND.
-            //
-            // This workaround is to prevent silent failure of this function.
-            // According to the specification on the SL Wiki, providing a position outside of the
-            if (pos.x < 0 || pos.x > World.RegionInfo.RegionSizeX || pos.y < 0 || pos.y > World.RegionInfo.RegionSizeY)
+            SceneObjectGroup grp = m_host.ParentGroup;
+        
+            if (grp == null || grp.IsDeleted || grp.inTransit)
+                return 0;
+        
+            if (IsPhysical() || grp.IsAttachment)
+                return 0;
+        
+            float regionSizeX = World.RegionInfo.RegionSizeX;
+            float regionSizeY = World.RegionInfo.RegionSizeY;
+        
+            // Second Life permits coordinates up to 10 metres
+            // outside the current region.
+            if (pos.x < -10.0 ||
+                pos.x > regionSizeX + 10.0 ||
+                pos.y < -10.0 ||
+                pos.y > regionSizeY + 10.0 ||
+                pos.z > Constants.RegionHeight)
             {
                 return 0;
             }
-            // END WORK AROUND
-            else if ( // this is not part of the workaround if-block because it's not related to the workaround.
-                IsPhysical() ||
-                m_host.ParentGroup.IsAttachment || // return FALSE if attachment
-                (
-                    pos.x < -10.0 || // return FALSE if more than 10 meters into a west-adjacent region.
-                    pos.x > (World.RegionInfo.RegionSizeX + 10) || // return FALSE if more than 10 meters into a east-adjacent region.
-                    pos.y < -10.0 || // return FALSE if more than 10 meters into a south-adjacent region.
-                    pos.y > (World.RegionInfo.RegionSizeY + 10) || // return FALSE if more than 10 meters into a north-adjacent region.
-                    pos.z > Constants.RegionHeight // return FALSE if altitude than 4096m
-                )
-            )
+        
+            bool outsideRegion =
+                pos.x < 0.0 ||
+                pos.x >= regionSizeX ||
+                pos.y < 0.0 ||
+                pos.y >= regionSizeY;
+        
+            if (outsideRegion)
             {
-                return 0;
+                /*
+                 * Assign through AbsolutePosition because its setter detects
+                 * out-of-region coordinates and starts CrossAsync().
+                 *
+                 * Do not perform current-region parcel checks against this
+                 * out-of-region coordinate.
+                 */
+                grp.AbsolutePosition = (Vector3)pos;
+        
+                // CrossAsync runs asynchronously, so this means the request
+                // was accepted, not that it has already completed.
+                return 1;
             }
-
-            // if we reach this point, then the object is not physical, it's not an attachment, and the destination is within the valid range.
-            // this could possibly be done in the above else-if block, but we're doing the check here to keep the code easier to read.
-
-            Vector3 objectPos = m_host.ParentGroup.RootPart.AbsolutePosition;
+        
+            // Normal movement within the current region.
+            Vector3 objectPos = grp.RootPart.AbsolutePosition;
             LandData here = World.GetLandData(objectPos);
             LandData there = World.GetLandData(pos);
-
-            // we're only checking prim limits if it's moving to a different parcel under the assumption that if the object got onto the parcel without exceeding the prim limits.
-
+        
+            if (here == null || there == null)
+                return 0;
+        
             bool sameParcel = here.GlobalID.Equals(there.GlobalID);
-
-            if (!sameParcel && !World.Permissions.CanRezObject(
-                m_host.ParentGroup.PrimCount, m_host.ParentGroup.OwnerID, pos))
+        
+            if (!sameParcel &&
+                !World.Permissions.CanRezObject(
+                    grp.PrimCount,
+                    grp.OwnerID,
+                    pos))
             {
                 return 0;
             }
-
-            SetPos(m_host.ParentGroup.RootPart, pos, false);
-
+        
+            SetPos(grp.RootPart, pos, false);
+        
             return VecDistSquare(pos, llGetRootPosition()) <= 0.01 ? 1 : 0;
         }
-
         // Capped movemment if distance > 10m (http://wiki.secondlife.com/wiki/LlSetPos)
         // note linked setpos is capped "differently"
         private LSL_Vector SetPosAdjust(LSL_Vector start, LSL_Vector end)
