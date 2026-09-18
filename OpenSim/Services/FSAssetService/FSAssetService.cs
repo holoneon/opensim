@@ -25,6 +25,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+ // modified for s3 Fiona Sweet 2026
+
 using log4net;
 using Nini.Config;
 using OpenMetaverse;
@@ -36,61 +38,320 @@ using OpenSim.Services.Interfaces;
 using OpenMetaverse.StructuredData;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Threading;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
 
 namespace OpenSim.Services.FSAssetService
 {
+    /// <summary>
+    /// Minimal S3 v4-signed client, enough for Backblaze B2's S3-compatible API.
+    /// Deliberately dependency-free so the service does not drag AWSSDK.S3 (and its
+    /// own transitive dependency set) into the OpenSim bin directory.
+    /// </summary>
+    internal sealed class B2S3Client
+    {
+        private const string ALGORITHM = "AWS4-HMAC-SHA256";
+        private const string SERVICE = "s3";
+        private const string EMPTY_PAYLOAD_SHA256 =
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+        private static readonly HttpClient m_Http = new HttpClient(
+                new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None })
+        {
+            Timeout = TimeSpan.FromSeconds(120)
+        };
+
+        private readonly string m_Scheme;
+        private readonly string m_EndpointHost;
+        private readonly int m_Port;
+        private readonly string m_Region;
+        private readonly string m_Bucket;
+        private readonly string m_AccessKey;
+        private readonly string m_SecretKey;
+        private readonly bool m_PathStyle;
+
+        public string Bucket { get { return m_Bucket; } }
+        public string Region { get { return m_Region; } }
+        public string EndpointHost { get { return m_EndpointHost; } }
+
+        public B2S3Client(string endpoint, string region, string bucket,
+                          string accessKey, string secretKey, bool pathStyle)
+        {
+            Uri uri = new Uri(endpoint);
+
+            m_Scheme = uri.Scheme;
+            m_EndpointHost = uri.Host;
+            m_Port = uri.IsDefaultPort ? -1 : uri.Port;
+            m_Bucket = bucket;
+            m_AccessKey = accessKey;
+            m_SecretKey = secretKey;
+            m_PathStyle = pathStyle;
+            m_Region = string.IsNullOrEmpty(region) ? DeriveRegion(m_EndpointHost) : region;
+
+            if (string.IsNullOrEmpty(m_Region))
+                throw new Exception("Could not determine S3 region; set B2Region explicitly");
+        }
+
+        /// <summary>
+        /// Backblaze endpoints look like s3.us-west-004.backblazeb2.com, so the
+        /// region is the second label. Anything else must be configured by hand.
+        /// </summary>
+        private static string DeriveRegion(string host)
+        {
+            string[] parts = host.Split('.');
+            if (parts.Length >= 3 && parts[0].Equals("s3", StringComparison.OrdinalIgnoreCase))
+                return parts[1];
+
+            return string.Empty;
+        }
+
+        /// <returns>The object bytes, or null if the object does not exist.</returns>
+        public byte[] GetObject(string key)
+        {
+            using (HttpResponseMessage response = Send(HttpMethod.Get, key, null, null))
+            {
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                    return null;
+
+                if (!response.IsSuccessStatusCode)
+                    throw new Exception(string.Format("S3 GET {0} returned {1}: {2}",
+                            key, (int)response.StatusCode, ReadBody(response)));
+
+                return response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+            }
+        }
+
+        public bool ObjectExists(string key)
+        {
+            using (HttpResponseMessage response = Send(HttpMethod.Head, key, null, null))
+            {
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                    return false;
+
+                if (!response.IsSuccessStatusCode)
+                    throw new Exception(string.Format("S3 HEAD {0} returned {1}",
+                            key, (int)response.StatusCode));
+
+                return true;
+            }
+        }
+
+        public void PutObject(string key, byte[] data, string contentType)
+        {
+            using (HttpResponseMessage response = Send(HttpMethod.Put, key, data ?? Array.Empty<byte>(), contentType))
+            {
+                if (!response.IsSuccessStatusCode)
+                    throw new Exception(string.Format("S3 PUT {0} returned {1}: {2}",
+                            key, (int)response.StatusCode, ReadBody(response)));
+            }
+        }
+
+        public void DeleteObject(string key)
+        {
+            using (HttpResponseMessage response = Send(HttpMethod.Delete, key, null, null))
+            {
+                // S3 delete is idempotent; 404 is not an error.
+                if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NotFound)
+                    throw new Exception(string.Format("S3 DELETE {0} returned {1}: {2}",
+                            key, (int)response.StatusCode, ReadBody(response)));
+            }
+        }
+
+        private static string ReadBody(HttpResponseMessage response)
+        {
+            try
+            {
+                string body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                return body == null || body.Length <= 512 ? body : body.Substring(0, 512);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private HttpResponseMessage Send(HttpMethod method, string key, byte[] payload, string contentType)
+        {
+            string canonicalPath;
+            Uri uri = BuildUri(key, out canonicalPath);
+
+            using (HttpRequestMessage request = new HttpRequestMessage(method, uri))
+            {
+                string payloadHash;
+
+                if (payload != null)
+                {
+                    payloadHash = HexLower(Sha256(payload));
+
+                    ByteArrayContent content = new ByteArrayContent(payload);
+                    content.Headers.ContentType = MediaTypeHeaderValue.Parse(
+                            string.IsNullOrEmpty(contentType) ? "application/octet-stream" : contentType);
+                    request.Content = content;
+                }
+                else
+                {
+                    payloadHash = EMPTY_PAYLOAD_SHA256;
+                }
+
+                Sign(request, method, canonicalPath, uri, payloadHash);
+
+                return m_Http.SendAsync(request, HttpCompletionOption.ResponseContentRead)
+                             .GetAwaiter().GetResult();
+            }
+        }
+
+        private Uri BuildUri(string key, out string canonicalPath)
+        {
+            string encodedKey = UriEncodePath(key);
+
+            if (m_PathStyle)
+            {
+                canonicalPath = "/" + UriEncodeSegment(m_Bucket) + "/" + encodedKey;
+                return new Uri(BaseUrl(m_EndpointHost) + canonicalPath);
+            }
+
+            canonicalPath = "/" + encodedKey;
+            return new Uri(BaseUrl(m_Bucket + "." + m_EndpointHost) + canonicalPath);
+        }
+
+        private string BaseUrl(string host)
+        {
+            return m_Port < 0
+                ? m_Scheme + "://" + host
+                : m_Scheme + "://" + host + ":" + m_Port.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private void Sign(HttpRequestMessage request, HttpMethod method,
+                          string canonicalPath, Uri uri, string payloadHash)
+        {
+            DateTime now = DateTime.UtcNow;
+            string amzDate = now.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture);
+            string dateStamp = now.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+            string host = uri.IsDefaultPort
+                    ? uri.Host
+                    : uri.Host + ":" + uri.Port.ToString(CultureInfo.InvariantCulture);
+
+            request.Headers.TryAddWithoutValidation("x-amz-content-sha256", payloadHash);
+            request.Headers.TryAddWithoutValidation("x-amz-date", amzDate);
+
+            // Only host and x-amz-* headers need to be signed; Content-Type and
+            // Content-Length are set by HttpClient and left unsigned on purpose.
+            const string signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+
+            string canonicalHeaders =
+                    "host:" + host + "\n" +
+                    "x-amz-content-sha256:" + payloadHash + "\n" +
+                    "x-amz-date:" + amzDate + "\n";
+
+            string canonicalRequest =
+                    method.Method + "\n" +
+                    canonicalPath + "\n" +
+                    string.Empty + "\n" +          // no query string
+                    canonicalHeaders + "\n" +
+                    signedHeaders + "\n" +
+                    payloadHash;
+
+            string scope = dateStamp + "/" + m_Region + "/" + SERVICE + "/aws4_request";
+
+            string stringToSign =
+                    ALGORITHM + "\n" +
+                    amzDate + "\n" +
+                    scope + "\n" +
+                    HexLower(Sha256(Encoding.UTF8.GetBytes(canonicalRequest)));
+
+            byte[] signingKey = HmacSha256(
+                    HmacSha256(
+                        HmacSha256(
+                            HmacSha256(Encoding.UTF8.GetBytes("AWS4" + m_SecretKey), dateStamp),
+                            m_Region),
+                        SERVICE),
+                    "aws4_request");
+
+            string signature = HexLower(HmacSha256(signingKey, stringToSign));
+
+            request.Headers.TryAddWithoutValidation("Authorization",
+                    ALGORITHM +
+                    " Credential=" + m_AccessKey + "/" + scope +
+                    ", SignedHeaders=" + signedHeaders +
+                    ", Signature=" + signature);
+        }
+
+        private static string UriEncodePath(string path)
+        {
+            StringBuilder sb = new StringBuilder(path.Length + 16);
+
+            foreach (char c in path)
+            {
+                if (c == '/')
+                    sb.Append('/');
+                else
+                    sb.Append(UriEncodeChar(c));
+            }
+
+            return sb.ToString();
+        }
+
+        private static string UriEncodeSegment(string segment)
+        {
+            StringBuilder sb = new StringBuilder(segment.Length + 16);
+
+            foreach (char c in segment)
+                sb.Append(UriEncodeChar(c));
+
+            return sb.ToString();
+        }
+
+        private static string UriEncodeChar(char c)
+        {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+            {
+                return c.ToString();
+            }
+
+            StringBuilder sb = new StringBuilder(12);
+            foreach (byte b in Encoding.UTF8.GetBytes(new[] { c }))
+                sb.Append('%').Append(b.ToString("X2", CultureInfo.InvariantCulture));
+
+            return sb.ToString();
+        }
+
+        private static byte[] Sha256(byte[] data)
+        {
+            using (SHA256 sha = SHA256.Create())
+                return sha.ComputeHash(data);
+        }
+
+        private static byte[] HmacSha256(byte[] key, string data)
+        {
+            using (HMACSHA256 hmac = new HMACSHA256(key))
+                return hmac.ComputeHash(Encoding.UTF8.GetBytes(data));
+        }
+
+        private static string HexLower(byte[] data)
+        {
+            StringBuilder sb = new StringBuilder(data.Length * 2);
+
+            foreach (byte b in data)
+                sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+
+            return sb.ToString();
+        }
+    }
+
     public class FSAssetConnector : ServiceBase, IAssetService
     {
         private static readonly ILog m_log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
         static System.Text.ASCIIEncoding enc = new System.Text.ASCIIEncoding();
-	private static readonly HttpClient m_IpfsClient = new HttpClient();
-
-        private string UploadToIpfsMaster(byte[] data)
-        {
-            if (data == null || data.Length == 0)
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                using (var content = new MultipartFormDataContent())
-                {
-                    var fileContent = new ByteArrayContent(data);
-                    fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("application/octet-stream");
-                    // IPFS expects the part name to be "path" or "file".
-                    content.Add(fileContent, "file", "asset");
-
-                    // Force CIDv1 and RawLeaves via QueryString.
-                    var response = m_IpfsClient.PostAsync("api/v0/add?cid-version=1&raw-leaves=true", content).Result;
-                    string result = response.Content.ReadAsStringAsync().Result;
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        string cid = ParseCidFromJson(result);
-                        if (string.IsNullOrEmpty(cid))
-                            m_log.ErrorFormat("[FSASSETS]: IPFS add succeeded but no CID was parsed. Response: {0}", result);
-                        return cid;
-                    }
-
-                    m_log.ErrorFormat("[FSASSETS]: IPFS add failed with HTTP {0}: {1}", response.StatusCode, result);
-                }
-            }
-            catch (Exception e)
-            {
-                m_log.ErrorFormat("[FSASSETS]: IPFS add threw exception: {0}", e);
-            }
-
-            return string.Empty;
-        }
 
         static byte[] ToCString(string s)
         {
@@ -114,9 +375,18 @@ namespace OpenSim.Services.FSAssetService
         protected int m_readTicks = 0;
         protected int m_missingAssets = 0;
         protected int m_missingAssetsFS = 0;
-        protected string m_FSBase;
         protected bool m_useOsgridFormat = false;
         protected bool m_showStats = true;
+
+        // Backblaze B2 (S3-compatible) backing store
+        private B2S3Client m_S3;
+        protected string m_KeyPrefix = string.Empty;
+        protected bool m_Compress = false;
+        protected int m_CompressMinBytes = 512;
+        protected int m_MaxUploadAttempts = 5;
+
+        // Touched only by the writer thread, so no lock required.
+        private readonly Dictionary<string, int> m_SpoolFailures = new Dictionary<string, int>();
 
         private static bool m_mainInitialized;
         private static object m_initLock = new object();
@@ -134,15 +404,38 @@ namespace OpenSim.Services.FSAssetService
             if (assetConfig == null)
                 throw new Exception("No AssetService configuration");
 
-            string ipfsHost = assetConfig.GetString("IPFSHost", string.Empty);
+            string endpoint = assetConfig.GetString("B2Endpoint", string.Empty);
+            string bucket = assetConfig.GetString("B2Bucket", string.Empty);
+            string accessKey = assetConfig.GetString("B2AccessKey", string.Empty);
+            string secretKey = assetConfig.GetString("B2SecretKey", string.Empty);
+            string region = assetConfig.GetString("B2Region", string.Empty);
+            bool pathStyle = assetConfig.GetBoolean("B2PathStyle", true);
 
-            if (string.IsNullOrEmpty(ipfsHost))
+            if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(bucket) ||
+                string.IsNullOrEmpty(accessKey) || string.IsNullOrEmpty(secretKey))
             {
-                m_log.ErrorFormat("[FSASSETS]: IPFSHost missing in section {0}", configName);
+                m_log.ErrorFormat(
+                        "[FSASSETS]: B2Endpoint, B2Bucket, B2AccessKey and B2SecretKey are all required in section {0}",
+                        configName);
                 throw new Exception("Configuration Error");
             }
 
-            if (!ipfsHost.EndsWith("/")) ipfsHost += "/";
+            if (!endpoint.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !endpoint.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                endpoint = "https://" + endpoint;
+            }
+
+            m_KeyPrefix = assetConfig.GetString("B2KeyPrefix", string.Empty).Trim().Trim('/');
+            if (m_KeyPrefix.Length > 0)
+                m_KeyPrefix += "/";
+
+            m_Compress = assetConfig.GetBoolean("B2Compress", false);
+            m_CompressMinBytes = assetConfig.GetInt("B2CompressMinBytes", m_CompressMinBytes);
+            m_MaxUploadAttempts = assetConfig.GetInt("MaxUploadAttempts", m_MaxUploadAttempts);
+
+            // Built per instance: secondary instances serve reads and need a working client too.
+            m_S3 = new B2S3Client(endpoint.TrimEnd('/'), region, bucket, accessKey, secretKey, pathStyle);
 
             lock (m_initLock)
             {
@@ -150,9 +443,6 @@ namespace OpenSim.Services.FSAssetService
                 {
                     m_mainInitialized = true;
                     m_isMainInstance = !assetConfig.GetBoolean("SecondaryInstance", false);
-
-                    m_IpfsClient.BaseAddress = new Uri(ipfsHost);
-                    m_IpfsClient.Timeout = TimeSpan.FromSeconds(30);
 
                     MainConsole.Instance.Commands.AddCommand("fs", false,
                             "show assets", "show assets", "Show asset stats",
@@ -212,7 +502,7 @@ namespace OpenSim.Services.FSAssetService
                 throw new Exception(string.Format("Could not find a storage interface in the module {0}", dllName));
 
             // Initialize DB And perform any migrations required
-            m_log.InfoFormat("[FSASSETS]: Connecting to: {0}",connectionString);
+            m_log.InfoFormat("[FSASSETS]: Connecting to: {0}", connectionString);
             m_DataConnector.Initialise(connectionString, realm, SkipAccessTimeDays);
 
             // Setup Fallback Service
@@ -262,7 +552,7 @@ namespace OpenSim.Services.FSAssetService
                             });
                 }
 
-                if(m_WriterThread == null)
+                if (m_WriterThread == null)
                 {
                     m_WriterThread = new Thread(Writer);
                     m_WriterThread.Start();
@@ -275,7 +565,8 @@ namespace OpenSim.Services.FSAssetService
                 }
             }
 
-            m_log.Info("[FSASSETS]: FS asset service (IPFS MOD) enabled");
+            m_log.InfoFormat("[FSASSETS]: FS asset service (B2/S3 MOD) enabled, bucket {0} at {1} region {2}",
+                    m_S3.Bucket, m_S3.EndpointHost, m_S3.Region);
         }
 
         private void Stats()
@@ -334,15 +625,50 @@ namespace OpenSim.Services.FSAssetService
             }
         }
 
+        /// <summary>
+        /// Object key for a given content hash. Mirrors HashToFile, but always uses
+        /// '/' separators (Path.Combine would emit '\' on Windows) and normalises the
+        /// hash to lower case so a key is never ambiguous.
+        /// </summary>
+        public string HashToKey(string hash)
+        {
+            if (string.IsNullOrEmpty(hash) || hash.Length < 10)
+                return m_KeyPrefix + "junkyard/" + (string.IsNullOrEmpty(hash) ? "unknown" : hash.ToLowerInvariant());
+
+            string h = hash.ToLowerInvariant();
+
+            if (m_useOsgridFormat)
+            {
+                return m_KeyPrefix +
+                       h.Substring(0, 3) + "/" +
+                       h.Substring(3, 3) + "/" +
+                       h;
+            }
+
+            return m_KeyPrefix +
+                   h.Substring(0, 2) + "/" +
+                   h.Substring(2, 2) + "/" +
+                   h.Substring(4, 2) + "/" +
+                   h.Substring(6, 4) + "/" +
+                   h;
+        }
+
         private bool AssetExists(string hash)
         {
-            string s = HashToFile(hash);
-            string diskFile = Path.Combine(m_FSBase, s);
+            string key = HashToKey(hash);
 
-            if (File.Exists(diskFile + ".gz") || File.Exists(diskFile))
-                return true;
+            try
+            {
+                if (m_S3.ObjectExists(key))
+                    return true;
 
-            return false;
+                return m_Compress && m_S3.ObjectExists(key + ".gz");
+            }
+            catch (Exception e)
+            {
+                m_log.ErrorFormat("[FSASSETS]: HEAD failed for key {0}: {1}", key, e.Message);
+                return false;
+            }
         }
 
         public virtual bool[] AssetsExist(string[] ids)
@@ -408,7 +734,7 @@ namespace OpenSim.Services.FSAssetService
             newAsset.Metadata = metadata;
             try
             {
-                newAsset.Data = GetFsData(id);
+                newAsset.Data = GetFsData(id, hash);
                 if (newAsset.Data.Length == 0)
                 {
                     AssetBase asset = null;
@@ -464,9 +790,9 @@ namespace OpenSim.Services.FSAssetService
             }
             catch (Exception exception)
             {
-		m_log.ErrorFormat("[FSASSETS]: Database connection error during Get: {0}", exception.Message);
-		    // Return null so OpenSim treats it as a 'missing asset' and stays alive
-		return null;
+                m_log.ErrorFormat("[FSASSETS]: Database connection error during Get: {0}", exception.Message);
+                // Return null so OpenSim treats it as a 'missing asset' and stays alive
+                return null;
             }
         }
 
@@ -482,7 +808,7 @@ namespace OpenSim.Services.FSAssetService
             if (m_DataConnector.Get(id, out hash) == null)
                 return null;
 
-            return GetFsData(id);
+            return GetFsData(id, hash);
         }
 
         public bool Get(string id, Object sender, AssetRetrieved handler)
@@ -496,51 +822,154 @@ namespace OpenSim.Services.FSAssetService
 
         public byte[] GetFsData(string assetId)
         {
-            // Get the CID from the local Postgres replica
-            string cid = m_DataConnector.GetCid(assetId);
-            
-            if (string.IsNullOrEmpty(cid))
+            return GetFsData(assetId, null);
+        }
+
+        /// <summary>
+        /// Fetch the payload from B2. The object key is taken from the storage-key
+        /// column when it holds one, otherwise it is derived from the content hash.
+        /// </summary>
+        /// <param name="knownHash">
+        /// Content hash if the caller already looked it up, to save a round trip.
+        /// </param>
+        public byte[] GetFsData(string assetId, string knownHash)
+        {
+            string key = null;
+
+            try
             {
-                m_log.WarnFormat("[FSASSETS]: Asset {0} not found in database.", assetId);
-                return Array.Empty<byte>();
+                key = m_DataConnector.GetCid(assetId);
+            }
+            catch (Exception e)
+            {
+                m_log.WarnFormat("[FSASSETS]: Storage key lookup failed for {0}: {1}", assetId, e.Message);
+            }
+
+            // Rows written by the old IPFS build hold a bare CID, which has no '/'
+            // in it and is useless against B2. Fall back to the content hash.
+            if (string.IsNullOrEmpty(key) || key.IndexOf('/') < 0)
+            {
+                string hash = knownHash;
+
+                if (string.IsNullOrEmpty(hash))
+                {
+                    if (m_DataConnector.Get(assetId, out hash) == null)
+                        hash = null;
+                }
+
+                if (string.IsNullOrEmpty(hash))
+                {
+                    m_log.WarnFormat("[FSASSETS]: No storage key or hash for asset {0}.", assetId);
+                    return Array.Empty<byte>();
+                }
+
+                key = HashToKey(hash);
             }
 
             try
             {
-                // Use configured IPFS API endpoint
+                bool gzipped = key.EndsWith(".gz", StringComparison.Ordinal);
+                byte[] raw = m_S3.GetObject(key);
 
-		string url = $"api/v0/cat?arg={cid}";
-            
-                using (var response = m_IpfsClient.PostAsync(url, null).Result)
+                if (raw == null && !gzipped)
                 {
-                    if (response.IsSuccessStatusCode)
-                    {
-                        return response.Content.ReadAsByteArrayAsync().Result;
-                    }
-            
-                    m_log.ErrorFormat("[FSASSETS]: IPFS API returned {0} for CID {1}", response.StatusCode, cid);
+                    // Object may have been stored compressed under a different setting.
+                    raw = m_S3.GetObject(key + ".gz");
+                    gzipped = raw != null;
                 }
+
+                if (raw == null)
+                {
+                    m_log.WarnFormat("[FSASSETS]: Asset {0} not present in bucket at key {1}", assetId, key);
+                    return Array.Empty<byte>();
+                }
+
+                return gzipped ? Decompress(raw) : raw;
             }
             catch (Exception e)
             {
-                m_log.ErrorFormat("[FSASSETS]: Failed to fetch from IPFS API: {0}", e.Message);
+                m_log.ErrorFormat("[FSASSETS]: Failed to fetch {0} from B2: {1}", key, e.Message);
             }
-        
+
             return Array.Empty<byte>();
         }
 
-        /* Writer thread process spool dir and write to IPFS - save meta data */
+        private static byte[] Compress(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                using (GZipStream gz = new GZipStream(ms, CompressionLevel.Optimal, true))
+                    gz.Write(data, 0, data.Length);
+
+                return ms.ToArray();
+            }
+        }
+
+        private static byte[] Decompress(byte[] data)
+        {
+            using (MemoryStream src = new MemoryStream(data))
+            using (GZipStream gz = new GZipStream(src, CompressionMode.Decompress))
+            using (MemoryStream dst = new MemoryStream())
+            {
+                gz.CopyTo(dst);
+                return dst.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Upload a payload to B2 under its content-addressed key.
+        /// Returns the object key on success, or an empty string on failure.
+        /// </summary>
+        private string UploadToB2(byte[] data, string hash, string contentType)
+        {
+            if (data == null)
+                return string.Empty;
+
+            if (data.Length == 0)
+                m_log.WarnFormat("[FSASSETS]: Storing zero-length payload for hash {0}", hash);
+
+            string key = HashToKey(hash);
+            byte[] body = data;
+
+            if (m_Compress && data.Length >= m_CompressMinBytes)
+            {
+                byte[] packed = Compress(data);
+                if (packed.Length < data.Length)
+                {
+                    body = packed;
+                    key += ".gz";
+                }
+            }
+
+            try
+            {
+                // Keys are content-addressed, so an existing object is byte-identical.
+                if (m_S3.ObjectExists(key))
+                    return key;
+
+                m_S3.PutObject(key, body, contentType);
+                return key;
+            }
+            catch (Exception e)
+            {
+                m_log.ErrorFormat("[FSASSETS]: B2 upload failed for key {0}: {1}", key, e.Message);
+            }
+
+            return string.Empty;
+        }
+
+        /* Writer thread processes the spool dir, uploads to B2 and saves metadata */
 
         private void Writer()
         {
             string spoolSubDir = Path.Combine(m_SpoolDirectory, "spool");
             Directory.CreateDirectory(spoolSubDir);
-        
+
             while (true)
             {
                 // We look for .meta files because they are written after the matching .asset file.
                 string[] metaFiles = Directory.GetFiles(spoolSubDir, "*.meta");
-        
+
                 foreach (string metaPath in metaFiles)
                 {
                     try
@@ -563,17 +992,15 @@ namespace OpenSim.Services.FSAssetService
                             continue;
                         }
 
-			//Map images etc don't have 'type' field so we have to determine
-
                         if (!metaMap.ContainsKey("ID") || !metaMap.ContainsKey("Hash"))
                         {
                             m_log.ErrorFormat("[FSASSETS]: Metadata missing required fields for {0}", metaPath);
                             continue;
                         }
 
-
+                        // Map images etc. don't have a 'Type' field so we have to determine it.
                         sbyte assetType;
-                        
+
                         if (metaMap.ContainsKey("Type"))
                         {
                             assetType = (sbyte)metaMap["Type"].AsInteger();
@@ -593,11 +1020,12 @@ namespace OpenSim.Services.FSAssetService
                             assetType = 0;
                         }
 
-
                         AssetMetadata metadata = new AssetMetadata();
                         metadata.ID = metaMap["ID"].AsString();
                         metadata.FullID = metaMap["ID"].AsUUID();
-                        metadata.Type = (sbyte)metaMap["Type"].AsInteger();
+                        // Use the resolved type, not a second lookup that silently yields 0
+                        // when the key is absent.
+                        metadata.Type = assetType;
                         metadata.Flags = metaMap.ContainsKey("Flags")
                             ? (AssetFlags)metaMap["Flags"].AsInteger()
                             : AssetFlags.Normal;
@@ -618,38 +1046,37 @@ namespace OpenSim.Services.FSAssetService
                             data == null ? -1 : data.Length,
                             hash);
 
-                        string cid = UploadToIpfsMaster(data);
-        
-                        if (string.IsNullOrEmpty(cid))
+                        string objectKey = UploadToB2(data, hash, metadata.ContentType);
+
+                        if (string.IsNullOrEmpty(objectKey))
                         {
-                            //m_log.ErrorFormat("[FSASSETS]: IPFS upload failed for asset {0}; leaving spool files for retry", metadata.ID);
-			    //delete empty files
-                            File.Delete(assetPath);
-                            File.Delete(metaPath);
+                            // Never delete the only queued copy on upload failure.
+                            NoteUploadFailure(assetId, metadata.ID, assetPath, metaPath);
                             continue;
                         }
 
-                        // Store metadata only after the IPFS add succeeds.
-                        m_DataConnector.Store(metadata, hash, cid);
+                        // Store metadata only after the upload succeeds.
+                        m_DataConnector.Store(metadata, hash, objectKey);
 
-                        // Verify the DB row/CID before deleting the only local queued copy.
-                        string storedCid = m_DataConnector.GetCid(metadata.ID);
-                        if (string.IsNullOrEmpty(storedCid))
+                        // Verify the DB row before deleting the only local queued copy.
+                        string storedKey = m_DataConnector.GetCid(metadata.ID);
+                        if (string.IsNullOrEmpty(storedKey))
                         {
-                            m_log.ErrorFormat("[FSASSETS]: DB store did not create CID row for asset {0}; leaving spool files for retry", metadata.ID);
+                            m_log.ErrorFormat("[FSASSETS]: DB store did not create a storage key row for asset {0}; leaving spool files for retry", metadata.ID);
                             continue;
                         }
 
-                        if (storedCid != cid)
+                        if (storedKey != objectKey)
                         {
-                            m_log.WarnFormat("[FSASSETS]: Stored CID mismatch for asset {0}. Expected {1}, got {2}", metadata.ID, cid, storedCid);
+                            m_log.WarnFormat("[FSASSETS]: Stored key mismatch for asset {0}. Expected {1}, got {2}", metadata.ID, objectKey, storedKey);
                         }
+
+                        m_SpoolFailures.Remove(assetId);
 
                         File.Delete(assetPath);
                         File.Delete(metaPath);
 
-                        m_log.InfoFormat("[FSASSETS]: Stored asset {0} in IPFS CID {1}", metadata.ID, cid);
-        
+                        m_log.InfoFormat("[FSASSETS]: Stored asset {0} in B2 as {1}", metadata.ID, objectKey);
                     }
                     catch (Exception e)
                     {
@@ -660,13 +1087,63 @@ namespace OpenSim.Services.FSAssetService
             }
         }
 
+        /// <summary>
+        /// Count a failed upload. Spool files are kept for retry, and quarantined
+        /// rather than deleted once MaxUploadAttempts is reached, so a poison asset
+        /// cannot stall the queue and nothing is silently lost.
+        /// </summary>
+        private void NoteUploadFailure(string assetId, string metaId, string assetPath, string metaPath)
+        {
+            int attempts;
+            m_SpoolFailures.TryGetValue(assetId, out attempts);
+            attempts++;
+            m_SpoolFailures[assetId] = attempts;
+
+            if (m_MaxUploadAttempts > 0 && attempts >= m_MaxUploadAttempts)
+            {
+                try
+                {
+                    string failedDir = Path.Combine(m_SpoolDirectory, "failed");
+                    Directory.CreateDirectory(failedDir);
+
+                    MoveOverwrite(assetPath, Path.Combine(failedDir, assetId + ".asset"));
+                    MoveOverwrite(metaPath, Path.Combine(failedDir, assetId + ".meta"));
+
+                    m_SpoolFailures.Remove(assetId);
+
+                    m_log.ErrorFormat(
+                            "[FSASSETS]: Upload of asset {0} failed {1} times; moved to {2} for manual recovery",
+                            metaId, attempts, failedDir);
+                }
+                catch (Exception e)
+                {
+                    m_log.ErrorFormat("[FSASSETS]: Could not quarantine spool files for {0}: {1}", metaId, e.Message);
+                }
+            }
+            else
+            {
+                m_log.WarnFormat(
+                        "[FSASSETS]: B2 upload failed for asset {0} (attempt {1}); leaving spool files for retry",
+                        metaId, attempts);
+            }
+        }
+
+        private static void MoveOverwrite(string source, string destination)
+        {
+            if (File.Exists(destination))
+                File.Delete(destination);
+
+            File.Move(source, destination);
+        }
+
         public virtual string Store(AssetBase asset)
         {
             return Store(asset, false);
         }
 
-        /* modified Store for IPFS - stick meta in spool and save to db on Write thread */
-  
+        /* Store puts the payload and metadata in the spool; the writer thread
+           uploads to B2 and records the row */
+
         private string Store(AssetBase asset, bool force)
         {
             if (asset == null || asset.Data == null)
@@ -731,7 +1208,7 @@ namespace OpenSim.Services.FSAssetService
             }
 
             string hash = GetSHA256Hash(asset.Data);
-        
+
             string spoolSubDir = Path.Combine(m_SpoolDirectory, "spool");
             Directory.CreateDirectory(spoolSubDir);
 
@@ -739,7 +1216,7 @@ namespace OpenSim.Services.FSAssetService
             string metaFile = Path.Combine(spoolSubDir, asset.ID + ".meta");
             string assetTempFile = assetFile + ".tmp";
             string metaTempFile = metaFile + ".tmp";
-        
+
             if (!File.Exists(assetFile) || !File.Exists(metaFile))
             {
                 if (File.Exists(assetTempFile))
@@ -752,7 +1229,7 @@ namespace OpenSim.Services.FSAssetService
                 if (File.Exists(assetFile))
                     File.Delete(assetFile);
                 File.Move(assetTempFile, assetFile);
-        
+
                 OSDMap metaMap = new OSDMap();
                 metaMap["ID"] = asset.FullID;
                 metaMap["Name"] = asset.Name;
@@ -761,7 +1238,7 @@ namespace OpenSim.Services.FSAssetService
                 metaMap["Flags"] = (int)asset.Metadata.Flags;
                 metaMap["Hash"] = hash;
                 metaMap["ContentType"] = asset.Metadata.ContentType ?? SLUtil.SLAssetTypeToContentType((int)asset.Type);
-                
+
                 File.WriteAllText(metaTempFile, OSDParser.SerializeJsonString(metaMap));
                 if (File.Exists(metaFile))
                     File.Delete(metaFile);
@@ -776,7 +1253,7 @@ namespace OpenSim.Services.FSAssetService
                     asset.Data.Length,
                     hash);
             }
-        
+
             return asset.ID;
         }
 
@@ -785,6 +1262,12 @@ namespace OpenSim.Services.FSAssetService
             return false;
         }
 
+        /// <summary>
+        /// Removes the database row only. Objects in the bucket are content-addressed
+        /// and shared between every asset with identical bytes, so deleting one here
+        /// would break the others. Reclaim orphaned objects with a separate sweep that
+        /// compares bucket keys against the hashes still referenced in the DB.
+        /// </summary>
         public virtual bool Delete(string id)
         {
             m_DataConnector.Delete(id);
@@ -822,7 +1305,8 @@ namespace OpenSim.Services.FSAssetService
             MainConsole.Instance.Output(String.Format("Type: {0}", asset.Type));
             MainConsole.Instance.Output(String.Format("Content-type: {0}", asset.Metadata.ContentType));
             MainConsole.Instance.Output(String.Format("Flags: {0}", asset.Metadata.Flags.ToString()));
-            MainConsole.Instance.Output(String.Format("FS file: {0}", HashToFile(hash)));
+            MainConsole.Instance.Output(String.Format("Bucket: {0}", m_S3.Bucket));
+            MainConsole.Instance.Output(String.Format("Object key: {0}", HashToKey(hash)));
 
             for (i = 0 ; i < 5 ; i++)
             {
@@ -902,30 +1386,6 @@ namespace OpenSim.Services.FSAssetService
         public void Get(string id, string ForeignAssetService, bool StoreOnLocalGrid, SimpleAssetRetrieved callBack)
         {
             return;
-        }
-
-        private string ParseCidFromJson(string jsonResponse)
-        {
-            try
-            {
-                // IPFS can return multiple JSON objects separated by newlines if 
-                // multiple files were added. We just need the first/only one.
-                string[] lines = jsonResponse.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                if (lines.Length > 0)
-                {
-                    // Deserialize the first line using OSD
-                    OSD map = OSDParser.DeserializeJson(lines[0]);
-                    if (map is OSDMap osdMap && osdMap.ContainsKey("Hash"))
-                    {
-                        return osdMap["Hash"].AsString();
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                m_log.ErrorFormat("[FSASSETS]: Failed to parse IPFS JSON response: {0}", e.Message);
-            }
-            return string.Empty;
         }
     }
 }

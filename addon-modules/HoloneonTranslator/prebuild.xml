@@ -1,0 +1,31 @@
+<Project name="Holoneon.Translator" path="addon-modules/HoloneonTranslator" type="Library">
+  <Configuration name="Debug">
+    <Options>
+      <OutputPath>../../bin/</OutputPath>
+    </Options>
+  </Configuration>
+
+  <Configuration name="Release">
+    <Options>
+      <OutputPath>../../bin/</OutputPath>
+    </Options>
+  </Configuration>
+
+  <ReferencePath>../../bin/</ReferencePath>
+
+  <Reference name="OpenMetaverseTypes"/>
+  <Reference name="OpenMetaverse"/>
+  <Reference name="OpenSim.Framework"/>
+  <Reference name="OpenSim.Region.Framework"/>
+  <Reference name="Nini"/>
+  <Reference name="log4net"/>
+  <Reference name="Mono.Addins"/>
+  <Reference name="MySql.Data"/>
+
+<Files>
+  <Match pattern="*.cs" recurse="true">
+    <Exclude name="obj" pattern="obj"/>
+  </Match>
+</Files>
+</Project>
+
