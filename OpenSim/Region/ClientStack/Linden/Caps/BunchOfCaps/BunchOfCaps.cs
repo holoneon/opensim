@@ -2258,9 +2258,10 @@ namespace OpenSim.Region.ClientStack.Linden
                         string displayName = string.IsNullOrWhiteSpace(ud.DisplayName)
                             ? fullname
                             : ud.DisplayName.Trim();
-
+/*
             m_log.DebugFormat(
                 "[CAPS]: DisplayName {0}", displayName);
+*/
 
                         LLSDxmlEncode2.AddMap(lsl);
                         LLSDxmlEncode2.AddElem("username", fullname, lsl);

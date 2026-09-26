@@ -187,12 +187,14 @@ namespace OpenSim.Services.Connectors
                     if (acc is Dictionary<string, object>)
                     {
                         UserAccount pinfo = new UserAccount((Dictionary<string, object>)acc);
+/*
 			m_log.WarnFormat(
                             "[ACCOUNT CONNECTOR]: {0} {1} DisplayName='{2}'",
                             pinfo.FirstName,
                             pinfo.LastName,
                             pinfo.DisplayName);
                         accounts.Add(pinfo);
+*/
                     }
                     else
                         m_log.DebugFormat("[ACCOUNT CONNECTOR]: GetUserAccounts received invalid response type {0}",
@@ -255,7 +257,7 @@ public virtual List<UserAccount> GetUserAccounts(UUID scopeID, List<string> IDs)
                     m_log.DebugFormat("[ACCOUNT CONNECTOR]: GetMultiUserAccounts received null or empty reply");
                     return null;
                 }
-		m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw doGetMultiUserAccounts reply = {0}", reply);
+		//m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw doGetMultiUserAccounts reply = {0}", reply);
             }
             catch (Exception e)
             {
@@ -288,11 +290,13 @@ public virtual List<UserAccount> GetUserAccounts(UUID scopeID, List<string> IDs)
                     {
                         UserAccount pinfo = new UserAccount((Dictionary<string, object>)acc);
 
+/*
                         m_log.WarnFormat(
                             "[ACCOUNT CONNECTOR]: {0} {1} DisplayName='{2}'",
                             pinfo.FirstName,
                             pinfo.LastName,
                             pinfo.DisplayName);
+*/
 
                         accounts.Add(pinfo);
                     }
@@ -374,7 +378,7 @@ public virtual List<UserAccount> GetUserAccounts(UUID scopeID, List<string> IDs)
             string reply = string.Empty;
             string reqString = ServerUtils.BuildQueryString(sendData);
             string uri = m_ServerURI + "/accounts";
-            m_log.DebugFormat("[ACCOUNTS CONNECTOR]: queryString = {0}", reqString);
+            //m_log.DebugFormat("[ACCOUNTS CONNECTOR]: queryString = {0}", reqString);
             try
             {
                 reply = SynchronousRestFormsRequester.MakeRequest("POST",
@@ -387,7 +391,7 @@ public virtual List<UserAccount> GetUserAccounts(UUID scopeID, List<string> IDs)
                     return null;
                 }
 
-m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw SendAndGetReply account reply = {0}", reply);
+//m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw SendAndGetReply account reply = {0}", reply);
 
             }
             catch (Exception e)
@@ -403,10 +407,11 @@ m_log.WarnFormat("[ACCOUNT CONNECTOR]: raw SendAndGetReply account reply = {0}",
                 if (replyData["result"] is Dictionary<string, object>)
                 {
                     account = new UserAccount((Dictionary<string, object>)replyData["result"]);
-
+/*
 m_log.WarnFormat(
     "[ACCOUNT CONNECTOR]: parsed DisplayName='{0}' for {1} {2}",
     account.DisplayName, account.FirstName, account.LastName);
+*/
 
                 }
             }
