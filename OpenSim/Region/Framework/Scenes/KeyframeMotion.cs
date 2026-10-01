@@ -183,8 +183,122 @@ namespace OpenSim.Region.Framework.Scenes
         //private static readonly ILog m_log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
         private static readonly MessagePackSerializerOptions _mpOptions =
-            MessagePackSerializerOptions.Standard
-                .WithResolver(ContractlessStandardResolver.Instance);
+            MessagePackSerializerOptions.Standard;
+
+	[MessagePackObject]
+	public sealed class MotionState
+	{
+	    [Key(0)] public float[] SerializedPosition { get; set; }
+	    [Key(1)] public float[] BasePosition { get; set; }
+	    [Key(2)] public float[] BaseRotation { get; set; }
+	    [Key(3)] public FrameState CurrentFrame { get; set; }
+	    [Key(4)] public FrameState[] Frames { get; set; }
+	    [Key(5)] public FrameState[] Keyframes { get; set; }
+	    [Key(6)] public int Mode { get; set; }
+	    [Key(7)] public int Data { get; set; }
+	    [Key(8)] public bool Running { get; set; }
+	    [Key(9)] public int Iterations { get; set; }
+	    [Key(10)] public int SkipLoops { get; set; }
+	}
+	
+	[MessagePackObject]
+	public sealed class FrameState
+	{
+	    [Key(0)] public float[] Position { get; set; }
+	    [Key(1)] public float[] Rotation { get; set; }
+	    [Key(2)] public float[] StartRotation { get; set; }
+	    [Key(3)] public int TimeMS { get; set; }
+	    [Key(4)] public int TimeTotal { get; set; }
+	    [Key(5)] public float[] AngularVelocity { get; set; }
+	    [Key(6)] public float[] StartPosition { get; set; }
+	}
+	
+	private static float[] PackVector(Vector3 v)
+	{
+	    return new float[] { v.X, v.Y, v.Z };
+	}
+	
+	private static float[] PackRotation(Quaternion q)
+	{
+	    return new float[] { q.X, q.Y, q.Z, q.W };
+	}
+	
+	private static Vector3 UnpackVector(float[] v)
+	{
+	    if (v == null || v.Length != 3)
+	        throw new InvalidDataException("Invalid keyframe vector.");
+	
+	    return new Vector3(v[0], v[1], v[2]);
+	}
+	
+	private static Quaternion UnpackRotation(float[] q)
+	{
+	    if (q == null || q.Length != 4)
+	        throw new InvalidDataException("Invalid keyframe rotation.");
+	
+	    return new Quaternion(q[0], q[1], q[2], q[3]);
+	}
+	
+	private static FrameState PackFrame(Keyframe frame)
+	{
+	    return new FrameState
+	    {
+	        Position = frame.Position.HasValue
+	            ? PackVector(frame.Position.Value) : null,
+	        Rotation = frame.Rotation.HasValue
+	            ? PackRotation(frame.Rotation.Value) : null,
+	        StartRotation = PackRotation(frame.StartRotation),
+	        TimeMS = frame.TimeMS,
+	        TimeTotal = frame.TimeTotal,
+	        AngularVelocity = PackVector(frame.AngularVelocity),
+	        StartPosition = PackVector(frame.StartPosition)
+	    };
+	}
+	
+	private static Keyframe UnpackFrame(FrameState frame)
+	{
+	    if (frame == null)
+	        throw new InvalidDataException("Missing keyframe.");
+	
+	    return new Keyframe
+	    {
+	        Position = frame.Position == null
+	            ? (Vector3?)null : UnpackVector(frame.Position),
+	        Rotation = frame.Rotation == null
+	            ? (Quaternion?)null : UnpackRotation(frame.Rotation),
+	        StartRotation = UnpackRotation(frame.StartRotation),
+	        TimeMS = frame.TimeMS,
+	        TimeTotal = frame.TimeTotal,
+	        AngularVelocity = UnpackVector(frame.AngularVelocity),
+	        StartPosition = UnpackVector(frame.StartPosition)
+	    };
+	}
+	
+	private static FrameState[] PackFrames(Keyframe[] frames)
+	{
+	    if (frames == null)
+	        return null;
+	
+	    FrameState[] result = new FrameState[frames.Length];
+	    for (int i = 0; i < frames.Length; i++)
+	        result[i] = PackFrame(frames[i]);
+	
+	    return result;
+	}
+	
+	private static Keyframe[] UnpackFrames(FrameState[] frames)
+	{
+	    if (frames == null)
+	        return null;
+	
+	    Keyframe[] result = new Keyframe[frames.Length];
+	    for (int i = 0; i < frames.Length; i++)
+	        result[i] = UnpackFrame(frames[i]);
+	
+	    return result;
+	}
+
+
 
         public enum PlayMode : int
         {
@@ -310,38 +424,54 @@ namespace OpenSim.Region.Framework.Scenes
                 m_timerStopped = true;
         }
 
-        public static KeyframeMotion FromData(SceneObjectGroup grp, Byte[] data)
-        {
-            KeyframeMotion newMotion = null;
-
-            try
-            {
-                using (MemoryStream ms = new MemoryStream(data))
-                {
-                     newMotion = MessagePackSerializer.Deserialize<KeyframeMotion>(ms, _mpOptions);
-                }
-
-                newMotion.m_group = grp;
-
-                if (grp != null)
-                {
-                    newMotion.m_scene = grp.Scene;
-                    if (grp.IsSelected)
-                        newMotion.m_selected = true;
-                }
-
-//                newMotion.m_timerStopped = false;
-//                newMotion.m_running = true;
-                newMotion.m_isCrossing = false;
-                newMotion.m_waitingCrossing = false;
-            }
-            catch
-            {
-                newMotion = null;
-            }
-
-            return newMotion;
-        }
+	public static KeyframeMotion FromData(SceneObjectGroup grp, Byte[] data)
+	{
+	    if (data == null || data.Length == 0)
+	        return null;
+	
+	    try
+	    {
+	        MotionState state =
+	            MessagePackSerializer.Deserialize<MotionState>(data, _mpOptions);
+	
+	        if (state == null || state.Frames == null)
+	            throw new InvalidDataException("Missing keyframe motion state.");
+	
+	        KeyframeMotion motion = new KeyframeMotion(
+	            null, (PlayMode)state.Mode, (DataFormat)state.Data);
+	
+	        motion.m_serializedPosition =
+	            UnpackVector(state.SerializedPosition);
+	        motion.m_basePosition = UnpackVector(state.BasePosition);
+	        motion.m_baseRotation = UnpackRotation(state.BaseRotation);
+	        motion.m_currentFrame = UnpackFrame(state.CurrentFrame);
+	        motion.m_frames =
+	            new List<Keyframe>(UnpackFrames(state.Frames));
+	        motion.m_keyframes = UnpackFrames(state.Keyframes);
+	
+	        motion.m_running = state.Running;
+	        motion.m_iterations = state.Iterations;
+	        motion.m_skipLoops = state.SkipLoops;
+	
+	        motion.m_group = grp;
+	        motion.m_scene = grp == null ? null : grp.Scene;
+	        motion.m_selected = grp != null && grp.IsSelected;
+	
+	        // Keep the timer stopped until the normal restore path resumes motion.
+	        motion.m_timerStopped = true;
+	        motion.m_isCrossing = false;
+	        motion.m_waitingCrossing = false;
+	
+	        return motion;
+	    }
+	    catch (Exception e)
+	    {
+	        LogManager.GetLogger(typeof(KeyframeMotion)).Error(
+	            "[KEYFRAME MOTION]: Failed to deserialize motion state.", e);
+	
+	        return null;
+	    }
+	}
 
         public void UpdateSceneObject(SceneObjectGroup grp)
         {
@@ -828,34 +958,41 @@ namespace OpenSim.Region.Framework.Scenes
 //            }
         }
 
-        public Byte[] Serialize()
-        {
-            bool timerWasStopped;
-            lock (m_frames)
-            {
-                timerWasStopped = m_timerStopped;
-            }
-        
-            StopTimer();
-        
-            SceneObjectGroup tmp = m_group;
-            m_group = null;
-        
-            try
-            {
-                if (!m_selected && tmp != null)
-                    m_serializedPosition = tmp.AbsolutePosition;
-        
-                return MessagePackSerializer.Serialize(this, _mpOptions);
-            }
-            finally
-            {
-                m_group = tmp;
-        
-                if (!timerWasStopped && m_running && !m_waitingCrossing)
-                    StartTimer();
-            }
-        }
+	public Byte[] Serialize()
+	{
+	    lock (m_frames)
+	    {
+	        bool timerWasStopped = m_timerStopped;
+	        m_timerStopped = true;
+	
+	        try
+	        {
+	            if (!m_selected && m_group != null)
+	                m_serializedPosition = m_group.AbsolutePosition;
+	
+	            MotionState state = new MotionState
+	            {
+	                SerializedPosition = PackVector(m_serializedPosition),
+	                BasePosition = PackVector(m_basePosition),
+	                BaseRotation = PackRotation(m_baseRotation),
+	                CurrentFrame = PackFrame(m_currentFrame),
+	                Frames = PackFrames(m_frames.ToArray()),
+	                Keyframes = PackFrames(m_keyframes),
+	                Mode = (int)m_mode,
+	                Data = (int)m_data,
+	                Running = m_running,
+	                Iterations = m_iterations,
+	                SkipLoops = m_skipLoops
+	            };
+	
+	            return MessagePackSerializer.Serialize(state, _mpOptions);
+	        }
+	        finally
+	        {
+	            m_timerStopped = timerWasStopped;
+	        }
+	    }
+	}
 
         public void StartCrossingCheck()
         {
