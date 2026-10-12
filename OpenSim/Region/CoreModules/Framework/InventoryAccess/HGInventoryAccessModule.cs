@@ -30,7 +30,6 @@ using System.Collections.Generic;
 using System.Reflection;
 
 using OpenSim.Framework;
-using OpenSim.Framework.Client;
 using OpenSim.Region.Framework.Interfaces;
 using OpenSim.Region.Framework.Scenes;
 
@@ -57,31 +56,6 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
         private bool m_OutboundPermission;
         private bool m_RestrictInventoryAccessAbroad;
         private bool m_bypassPermissions = true;
-
-        // Optional resident control of the My Suitcase restriction.
-        //
-        // Example configuration:
-        //
-        // [HGInventoryAccessModule]
-        //     RestrictInventoryAccessAbroad = true
-        //     AllowUserSuitcaseControl = true
-        //     SuitcasePreferenceChannel = 19341
-        //
-        // Residents use one of these commands on their home grid:
-        //     /19341 suitcase on
-        //     /19341 suitcase off
-        //     /19341 suitcase status
-        //     /19341 suitcase default
-        //
-        // "on" means restrict inventory to My Suitcase while abroad.
-        // "off" means allow the resident's full inventory while abroad.
-        private bool m_AllowUserSuitcaseControl;
-        private int m_SuitcasePreferenceChannel = 19341;
-
-        // These marker folders persist the preference in the central inventory
-        // database. HGSuitcaseInventoryService reads the same markers in Robust.
-        private const string SUITCASE_RESTRICTION_ON_MARKER = ".HG-Suitcase-Restriction-ON";
-        private const string SUITCASE_RESTRICTION_OFF_MARKER = ".HG-Suitcase-Restriction-OFF";
 
         // This simple check makes it possible to support grids in which all the simulators
         // share all central services of the Robust server EXCEPT assets. In other words,
@@ -120,18 +94,9 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
                     {
                         m_OutboundPermission = thisModuleConfig.GetBoolean("OutboundPermission", true);
                         m_RestrictInventoryAccessAbroad = thisModuleConfig.GetBoolean("RestrictInventoryAccessAbroad", true);
-                        m_AllowUserSuitcaseControl = thisModuleConfig.GetBoolean("AllowUserSuitcaseControl", false);
-                        m_SuitcasePreferenceChannel = thisModuleConfig.GetInt("SuitcasePreferenceChannel", 19341);
                         m_CheckSeparateAssets = thisModuleConfig.GetBoolean("CheckSeparateAssets", false);
                         m_LocalAssetsURL = thisModuleConfig.GetString("RegionHGAssetServerURI", string.Empty);
                         m_LocalAssetsURL = m_LocalAssetsURL.Trim('/');
-
-                        if (m_AllowUserSuitcaseControl)
-                        {
-                            m_log.InfoFormat(
-                                "[HG INVENTORY ACCESS MODULE]: Resident suitcase control enabled on channel {0}",
-                                m_SuitcasePreferenceChannel);
-                        }
                     }
                     else
                         m_log.Warn("[HG INVENTORY ACCESS MODULE]: HGInventoryAccessModule configs not found");
@@ -161,24 +126,10 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
             scene.EventManager.OnTeleportStart += TeleportStart;
             scene.EventManager.OnTeleportFail += TeleportFail;
 
-            // Observe chat after ChatModule has accepted it. EventManager
-            // isolates subscriber exceptions, so this command listener cannot
-            // interrupt WorldComm delivery to scripts on any channel.
-            if (m_AllowUserSuitcaseControl)
-                scene.EventManager.OnChatFromClient += OnSuitcaseCommand;
-
             // We're fgoing to enforce some stricter permissions if Outbound is false
             scene.Permissions.OnTakeObject += CanTakeObject;
             scene.Permissions.OnTakeCopyObject += CanTakeObject;
             scene.Permissions.OnTransferUserInventory += OnTransferUserInventory;
-        }
-
-        public override void RemoveRegion(Scene scene)
-        {
-            if (m_AllowUserSuitcaseControl)
-                scene.EventManager.OnChatFromClient -= OnSuitcaseCommand;
-
-            base.RemoveRegion(scene);
         }
 
         #endregion
@@ -191,96 +142,6 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
             client.OnCompleteMovementToRegion += OnCompleteMovementToRegion;
         }
 
-        private void OnSuitcaseCommand(object sender, OSChatMessage chat)
-        {
-            if (chat == null || chat.Sender == null || chat.Message == null ||
-                    chat.Channel != m_SuitcasePreferenceChannel)
-                return;
-
-            string[] parts = chat.Message.Trim().Split(
-                new char[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-
-            if (parts.Length == 0 || !parts[0].Equals("suitcase", StringComparison.OrdinalIgnoreCase))
-                return;
-
-            IClientAPI client = chat.Sender;
-            IUserManagement uMan = m_Scene.RequestModuleInterface<IUserManagement>();
-
-            if (uMan == null || !uMan.IsLocalGridUser(client.AgentId))
-            {
-                client.SendAgentAlertMessage(
-                    "The suitcase preference can only be changed by a local resident on their home grid.", false);
-                return;
-            }
-
-            if (parts.Length == 1 || parts[1].Equals("status", StringComparison.OrdinalIgnoreCase))
-            {
-                bool hasOverride = TryGetSuitcasePreference(client.AgentId, out bool enabled);
-                bool effective = hasOverride ? enabled : m_RestrictInventoryAccessAbroad;
-                string sourceText = hasOverride ? "your saved preference" : "the grid default";
-
-                client.SendAgentAlertMessage(
-                    string.Format(
-                        "My Suitcase restriction is {0} (using {1}).",
-                        effective ? "ON" : "OFF", sourceText), false);
-                return;
-            }
-
-            string option = parts[1].ToLowerInvariant();
-
-            if (option == "on" || option == "enable" || option == "enabled")
-            {
-                if (SaveSuitcasePreference(client, true))
-                {
-                    client.SendAgentAlertMessage(
-                        "My Suitcase restriction is ON. Only My Suitcase and Current Outfit will be available on your next Hypergrid trip.", false);
-                }
-                else
-                {
-                    client.SendAgentAlertMessage(
-                        "Your suitcase preference could not be saved. Please contact the grid administrator.", false);
-                }
-                return;
-            }
-
-            if (option == "off" || option == "disable" || option == "disabled")
-            {
-                if (SaveSuitcasePreference(client, false))
-                {
-                    client.SendAgentAlertMessage(
-                        "My Suitcase restriction is OFF. Your full inventory will be available on your next Hypergrid trip.", false);
-                }
-                else
-                {
-                    client.SendAgentAlertMessage(
-                        "Your suitcase preference could not be saved. Please contact the grid administrator.", false);
-                }
-                return;
-            }
-
-            if (option == "default" || option == "reset")
-            {
-                if (RemoveSuitcasePreference(client))
-                {
-                    client.SendAgentAlertMessage(
-                        string.Format(
-                            "Your suitcase preference now uses the grid default, which is {0}.",
-                            m_RestrictInventoryAccessAbroad ? "ON" : "OFF"), false);
-                }
-                else
-                {
-                    client.SendAgentAlertMessage(
-                        "Your suitcase preference could not be reset. Please contact the grid administrator.", false);
-                }
-                return;
-            }
-
-            client.SendAgentAlertMessage(
-                string.Format(
-                    "Usage: /{0} suitcase on | off | status | default",
-                    m_SuitcasePreferenceChannel), false);
-        }
-
         protected void OnCompleteMovementToRegion(IClientAPI client, bool arg2)
         {
             //m_log.DebugFormat("[HG INVENTORY ACCESS MODULE]: OnCompleteMovementToRegion of user {0}", client.Name);
@@ -289,30 +150,27 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
                 AgentCircuitData aCircuit = sp.Scene.AuthenticateHandler.GetAgentCircuitData(client.AgentId);
                 if (aCircuit != null &&  (aCircuit.teleportFlags & (uint)Constants.TeleportFlags.ViaHGLogin) != 0)
                 {
-                    // Always restore the real root-folder names for a local user.
-                    // This is harmless when no restriction was applied and also
-                    // handles a preference that changed since the prior trip.
-                    IUserManagement uMan = m_Scene.RequestModuleInterface<IUserManagement>();
-                    if (uMan != null && uMan.IsLocalGridUser(client.AgentId))
+                    if (m_RestrictInventoryAccessAbroad)
                     {
-                        ProcessInventoryForComingHome(client);
+                        IUserManagement uMan = m_Scene.RequestModuleInterface<IUserManagement>();
+                        if (uMan.IsLocalGridUser(client.AgentId))
+                            ProcessInventoryForComingHome(client);
+                        else
+                            ProcessInventoryForArriving(client);
                     }
-                    else
-                        ProcessInventoryForArriving(client);
                 }
             }
         }
 
         protected void TeleportStart(IClientAPI client, GridRegion destination, GridRegion finalDestination, uint teleportFlags, bool gridLogout)
         {
-            if (gridLogout)
+            if (gridLogout && m_RestrictInventoryAccessAbroad)
             {
                 IUserManagement uMan = m_Scene.RequestModuleInterface<IUserManagement>();
                 if (uMan != null && uMan.IsLocalGridUser(client.AgentId))
                 {
                     // local grid user
-                    if (IsSuitcaseRestrictionEnabled(client.AgentId))
-                        ProcessInventoryForHypergriding(client);
+                    ProcessInventoryForHypergriding(client);
                 }
                 else
                 {
@@ -325,13 +183,11 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
 
         protected void TeleportFail(IClientAPI client, bool gridLogout)
         {
-            if (gridLogout)
+            if (gridLogout && m_RestrictInventoryAccessAbroad)
             {
                 IUserManagement uMan = m_Scene.RequestModuleInterface<IUserManagement>();
-                if (uMan != null && uMan.IsLocalGridUser(client.AgentId))
+                if (uMan.IsLocalGridUser(client.AgentId))
                 {
-                    // Restore unconditionally in case this failed attempt applied
-                    // the restriction or the resident changed their preference.
                     ProcessInventoryForComingHome(client);
                 }
                 else
@@ -340,137 +196,6 @@ namespace OpenSim.Region.CoreModules.Framework.InventoryAccess
                 }
             }
         }
-
-        #region Resident suitcase preferences
-
-        private bool IsSuitcaseRestrictionEnabled(UUID agentID)
-        {
-            if (!m_AllowUserSuitcaseControl)
-                return m_RestrictInventoryAccessAbroad;
-
-            if (TryGetSuitcasePreference(agentID, out bool enabled))
-                return enabled;
-
-            return m_RestrictInventoryAccessAbroad;
-        }
-
-        private bool TryGetSuitcasePreference(UUID agentID, out bool enabled)
-        {
-            enabled = m_RestrictInventoryAccessAbroad;
-
-            InventoryFolderBase suitcase = GetSuitcaseFolder(agentID);
-            if (suitcase == null)
-                return false;
-
-            InventoryCollection content = m_Scene.InventoryService.GetFolderContent(agentID, suitcase.ID);
-            if (content == null || content.Folders == null)
-                return false;
-
-            // ON wins if both markers somehow exist.
-            foreach (InventoryFolderBase folder in content.Folders)
-            {
-                if (folder.Name == SUITCASE_RESTRICTION_ON_MARKER)
-                {
-                    enabled = true;
-                    return true;
-                }
-            }
-
-            foreach (InventoryFolderBase folder in content.Folders)
-            {
-                if (folder.Name == SUITCASE_RESTRICTION_OFF_MARKER)
-                {
-                    enabled = false;
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private bool SaveSuitcasePreference(IClientAPI client, bool enabled)
-        {
-            InventoryFolderBase suitcase = GetSuitcaseFolder(client.AgentId);
-            if (suitcase == null)
-                return false;
-
-            if (!DeleteSuitcasePreferenceMarkers(client, suitcase))
-                return false;
-
-            string markerName = enabled
-                ? SUITCASE_RESTRICTION_ON_MARKER
-                : SUITCASE_RESTRICTION_OFF_MARKER;
-
-            InventoryFolderBase marker = new InventoryFolderBase(
-                UUID.Random(), markerName, client.AgentId,
-                (short)FolderType.None, suitcase.ID, 1);
-
-            if (!m_Scene.InventoryService.AddFolder(marker))
-                return false;
-
-            client.SendBulkUpdateInventory(marker);
-            return true;
-        }
-
-        private bool RemoveSuitcasePreference(IClientAPI client)
-        {
-            InventoryFolderBase suitcase = GetSuitcaseFolder(client.AgentId);
-            return suitcase != null && DeleteSuitcasePreferenceMarkers(client, suitcase);
-        }
-
-        private bool DeleteSuitcasePreferenceMarkers(IClientAPI client, InventoryFolderBase suitcase)
-        {
-            InventoryCollection content = m_Scene.InventoryService.GetFolderContent(client.AgentId, suitcase.ID);
-            if (content == null || content.Folders == null)
-                return false;
-
-            List<UUID> markerIDs = new List<UUID>();
-            foreach (InventoryFolderBase folder in content.Folders)
-            {
-                if (folder.Name == SUITCASE_RESTRICTION_ON_MARKER ||
-                        folder.Name == SUITCASE_RESTRICTION_OFF_MARKER)
-                    markerIDs.Add(folder.ID);
-            }
-
-            if (markerIDs.Count == 0)
-                return true;
-
-            if (!m_Scene.InventoryService.DeleteFolders(client.AgentId, markerIDs))
-                return false;
-
-            if (client is IClientCore clientCore &&
-                    clientCore.TryGet<IClientInventory>(out IClientInventory inventoryClient))
-                inventoryClient.SendRemoveInventoryFolders(markerIDs.ToArray());
-
-            return true;
-        }
-
-        private InventoryFolderBase GetSuitcaseFolder(UUID agentID)
-        {
-            InventoryFolderBase suitcase = m_Scene.InventoryService.GetFolderForType(
-                agentID, FolderType.Suitcase);
-
-            if (suitcase != null)
-                return suitcase;
-
-            InventoryFolderBase root = m_Scene.InventoryService.GetRootFolder(agentID);
-            if (root == null)
-                return null;
-
-            InventoryCollection content = m_Scene.InventoryService.GetFolderContent(agentID, root.ID);
-            if (content == null || content.Folders == null)
-                return null;
-
-            foreach (InventoryFolderBase folder in content.Folders)
-            {
-                if (folder.Name == InventoryFolderBase.SUITCASE_FOLDER_NAME)
-                    return folder;
-            }
-
-            return null;
-        }
-
-        #endregion
 
         private void PostInventoryAsset(InventoryItemBase item, int userlevel)
         {

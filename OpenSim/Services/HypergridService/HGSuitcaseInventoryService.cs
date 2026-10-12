@@ -25,8 +25,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// modified by Fiona Sweet - user configure My Suitcase function using chat commands
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -65,16 +63,6 @@ namespace OpenSim.Services.HypergridService
         private ExpiringCache<UUID, List<XInventoryFolder>> m_SuitcaseTrees = new ExpiringCache<UUID, List<XInventoryFolder>>();
         private ExpiringCache<UUID, AvatarAppearance> m_Appearances = new ExpiringCache<UUID, AvatarAppearance>();
 
-        // These names must match HGInventoryAccessModule. The small marker
-        // folders are stored below My Suitcase, so the preference lives in the
-        // central inventory database and is visible to every simulator and to
-        // Robust without a separate shared file or database table.
-        private const string SUITCASE_RESTRICTION_ON_MARKER = ".HG-Suitcase-Restriction-ON";
-        private const string SUITCASE_RESTRICTION_OFF_MARKER = ".HG-Suitcase-Restriction-OFF";
-
-        private bool m_AllowUserSuitcaseControl;
-        private bool m_RestrictInventoryAccessAbroad = true;
-
         public HGSuitcaseInventoryService(IConfigSource config, string configName)
             : base(config, configName)
         {
@@ -91,9 +79,6 @@ namespace OpenSim.Services.HypergridService
             IConfig invConfig = config.Configs[m_ConfigName];
             if (invConfig != null)
             {
-                m_AllowUserSuitcaseControl = invConfig.GetBoolean("AllowUserSuitcaseControl", false);
-                m_RestrictInventoryAccessAbroad = invConfig.GetBoolean("RestrictInventoryAccessAbroad", true);
-
                 string userAccountsDll = invConfig.GetString("UserAccountsService", string.Empty);
                 if (userAccountsDll.Length == 0)
                     throw new Exception("Please specify UserAccountsService in HGInventoryService configuration");
@@ -128,13 +113,6 @@ namespace OpenSim.Services.HypergridService
 
         public override List<InventoryFolderBase> GetInventorySkeleton(UUID principalID)
         {
-            if (!IsSuitcaseRestrictionEnabled(principalID))
-            {
-                List<InventoryFolderBase> fullInventory = base.GetInventorySkeleton(principalID);
-                RemovePreferenceMarkers(fullInventory);
-                return fullInventory;
-            }
-
             XInventoryFolder suitcase = GetSuitcaseXFolder(principalID);
 
             if (suitcase == null)
@@ -150,8 +128,7 @@ namespace OpenSim.Services.HypergridService
             List<InventoryFolderBase> folders = new List<InventoryFolderBase>();
             foreach (XInventoryFolder x in tree)
             {
-                if (!IsPreferenceMarker(x.folderName))
-                    folders.Add(ConvertToOpenSim(x));
+                folders.Add(ConvertToOpenSim(x));
             }
 
             SetAsNormalFolder(suitcase);
@@ -172,9 +149,6 @@ namespace OpenSim.Services.HypergridService
                 m_log.WarnFormat("[HG SUITCASE INVENTORY SERVICE]: Unable to retrieve local root folder for user {0}", principalID);
                 return null;
             }
-
-            if (!IsSuitcaseRestrictionEnabled(principalID))
-                return ConvertToOpenSim(root);
 
             // Warp! Root folder for travelers is the suitcase folder
             XInventoryFolder suitcase = GetSuitcaseXFolder(principalID);
@@ -242,9 +216,6 @@ namespace OpenSim.Services.HypergridService
 
         public override InventoryFolderBase GetFolderForType(UUID principalID, FolderType type)
         {
-            if (!IsSuitcaseRestrictionEnabled(principalID))
-                return base.GetFolderForType(principalID, type);
-
             //m_log.DebugFormat("[HG INVENTORY SERVICE]: GetFolderForType for {0} {0}", principalID, type);
             XInventoryFolder suitcase = GetSuitcaseXFolder(principalID);
 
@@ -288,8 +259,6 @@ namespace OpenSim.Services.HypergridService
                 m_log.WarnFormat("[HG SUITCASE INVENTORY SERVICE]: Something wrong with user {0}'s suitcase folder", principalID);
                 coll = new InventoryCollection();
             }
-
-            RemovePreferenceMarkers(coll.Folders);
             return coll;
         }
 
@@ -308,11 +277,6 @@ namespace OpenSim.Services.HypergridService
 
         public override bool AddFolder(InventoryFolderBase folder)
         {
-            // Preference markers may only be created by the trusted home-grid
-            // inventory service, never through this public HG endpoint.
-            if (IsPreferenceMarker(folder.Name))
-                return false;
-
             //m_log.WarnFormat("[HG SUITCASE INVENTORY SERVICE]: AddFolder {0} {1}", folder.Name, folder.ParentID);
             // Let's do a bit of sanity checking, more than the base service does
             // make sure the given folder's parent folder exists under the suitcase tree of this user
@@ -338,9 +302,6 @@ namespace OpenSim.Services.HypergridService
 
         public override bool UpdateFolder(InventoryFolderBase folder)
         {
-            if (IsPreferenceMarker(folder.Name) || IsPreferenceMarkerFolder(folder.Owner, folder.ID))
-                return false;
-
             //m_log.DebugFormat("[HG SUITCASE INVENTORY SERVICE]: Update folder {0}, version {1}", folder.ID, folder.Version);
             if (!IsWithinSuitcaseTree(folder.Owner, folder.ID))
             {
@@ -354,9 +315,6 @@ namespace OpenSim.Services.HypergridService
 
         public override bool MoveFolder(InventoryFolderBase folder)
         {
-            if (IsPreferenceMarkerFolder(folder.Owner, folder.ID))
-                return false;
-
             if (!IsWithinSuitcaseTree(folder.Owner, folder.ID))
             {
                 m_log.DebugFormat("[HG SUITCASE INVENTORY SERVICE]: MoveFolder: folder {0} (user {1}) is not within Suitcase tree", folder.ID, folder.Owner);
@@ -374,24 +332,12 @@ namespace OpenSim.Services.HypergridService
 
         public override bool DeleteFolders(UUID principalID, List<UUID> folderIDs)
         {
-            foreach (UUID folderID in folderIDs)
-            {
-                if (IsPreferenceMarkerFolder(principalID, folderID))
-                    return false;
-            }
-
-            if (!IsSuitcaseRestrictionEnabled(principalID))
-                return base.DeleteFolders(principalID, folderIDs);
-
             // NOGO
             return false;
         }
 
         public override bool PurgeFolder(InventoryFolderBase folder)
         {
-            if (!IsSuitcaseRestrictionEnabled(folder.Owner))
-                return base.PurgeFolder(folder);
-
             // NOGO
             return false;
         }
@@ -440,7 +386,7 @@ namespace OpenSim.Services.HypergridService
             foreach (InventoryItemBase item in items)
             {
                 InventoryItemBase originalItem = base.GetItem(item.Owner, item.ID);
-                if (originalItem == null || !IsWithinSuitcaseTree(originalItem.Owner, originalItem.Folder))
+                if (!IsWithinSuitcaseTree(originalItem.Owner, originalItem.Folder))
                 {
                     m_log.DebugFormat("[HG SUITCASE INVENTORY SERVICE]: MoveItems: folder {0} (user {1}) is not within Suitcase tree", item.Folder, item.Owner);
                     return false;
@@ -452,9 +398,6 @@ namespace OpenSim.Services.HypergridService
 
         public override bool DeleteItems(UUID principalID, List<UUID> itemIDs)
         {
-            if (!IsSuitcaseRestrictionEnabled(principalID))
-                return base.DeleteItems(principalID, itemIDs);
-
             return false;
         }
 
@@ -485,15 +428,12 @@ namespace OpenSim.Services.HypergridService
             return it;
         }
 
-        public override InventoryFolderBase GetFolder(UUID principalID, UUID folderID)
+        public new InventoryFolderBase GetFolder(UUID principalID, UUID folderID)
         {
             InventoryFolderBase f = base.GetFolder(principalID, folderID);
 
             if (f != null)
             {
-                if (IsPreferenceMarker(f.Name))
-                    return null;
-
                 if (!IsWithinSuitcaseTree(f.Owner, f.ID))
                 {
                     m_log.DebugFormat("[HG SUITCASE INVENTORY SERVICE]: GetFolder: folder {0}/{1} (user {2}) is not within Suitcase tree",
@@ -514,49 +454,6 @@ namespace OpenSim.Services.HypergridService
         //}
 
         #region Auxiliary functions
-
-        private bool IsSuitcaseRestrictionEnabled(UUID principalID)
-        {
-            if (!m_AllowUserSuitcaseControl)
-                return m_RestrictInventoryAccessAbroad;
-
-            // An ON marker wins if both markers somehow exist. This is the
-            // safer failure mode and the next resident command removes both.
-            XInventoryFolder[] markers = m_Database.GetFolders(
-                new string[] { "agentID", "folderName" },
-                new string[] { principalID.ToString(), SUITCASE_RESTRICTION_ON_MARKER });
-
-            if (markers != null && markers.Length > 0)
-                return true;
-
-            markers = m_Database.GetFolders(
-                new string[] { "agentID", "folderName" },
-                new string[] { principalID.ToString(), SUITCASE_RESTRICTION_OFF_MARKER });
-
-            if (markers != null && markers.Length > 0)
-                return false;
-
-            return m_RestrictInventoryAccessAbroad;
-        }
-
-        private static bool IsPreferenceMarker(string folderName)
-        {
-            return folderName == SUITCASE_RESTRICTION_ON_MARKER ||
-                folderName == SUITCASE_RESTRICTION_OFF_MARKER;
-        }
-
-        private static void RemovePreferenceMarkers(List<InventoryFolderBase> folders)
-        {
-            if (folders != null)
-                folders.RemoveAll(folder => IsPreferenceMarker(folder.Name));
-        }
-
-        private bool IsPreferenceMarkerFolder(UUID principalID, UUID folderID)
-        {
-            InventoryFolderBase folder = base.GetFolder(principalID, folderID);
-            return folder != null && IsPreferenceMarker(folder.Name);
-        }
-
         private XInventoryFolder GetXFolder(UUID userID, UUID folderID)
         {
             XInventoryFolder[] folders = m_Database.GetFolders(
@@ -681,9 +578,6 @@ namespace OpenSim.Services.HypergridService
         /// <returns></returns>
         private bool IsWithinSuitcaseTree(UUID principalID, UUID folderID)
         {
-            if (!IsSuitcaseRestrictionEnabled(principalID))
-                return true;
-
             XInventoryFolder suitcase = GetSuitcaseXFolder(principalID);
 
             if (suitcase == null)
