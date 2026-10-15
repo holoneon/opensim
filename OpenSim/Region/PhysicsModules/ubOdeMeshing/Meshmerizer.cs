@@ -35,7 +35,6 @@ using OpenSim.Region.PhysicsModules.SharedBase;
 using OpenSim.Region.PhysicsModules.ConvexDecompositionDotNet;
 using OpenMetaverse;
 using OpenMetaverse.StructuredData;
-using System.Drawing;
 using System.Threading;
 using System.IO.Compression;
 using PrimMesher;
@@ -701,16 +700,22 @@ namespace OpenSim.Region.PhysicsModule.ubODEMeshing
             coords = new List<Vector3>();
             faces = new List<Face>();
             PrimMesher.SculptMesh sculptMesh;
-            Image idata;
+            OpenMetaverse.Imaging.ManagedImage idata;
 
             if (primShape.SculptData == null || primShape.SculptData.Length == 0)
                 return false;
 
             try
             {
-                OpenMetaverse.Imaging.OpenJPEG.DecodeToImage(primShape.SculptData, out OpenMetaverse.Imaging.ManagedImage unusedData, out idata);
+                if (!OpenMetaverse.Imaging.OpenJPEG.DecodeToImage(
+                        primShape.SculptData, out idata))
+                {
+                    m_log.WarnFormat(
+                            "[PHYSICS]: Failed to decode sculpt texture for {0}",
+                            primName);
 
-                unusedData = null;
+                    return false;
+               	}
 
                 if (idata == null)
                 {
@@ -748,11 +753,8 @@ namespace OpenSim.Region.PhysicsModule.ubODEMeshing
             bool mirror = ((primShape.SculptType & 128) != 0);
             bool invert = ((primShape.SculptType & 64) != 0);
 
-            sculptMesh = new PrimMesher.SculptMesh((Bitmap)idata, sculptType, (int)lod, mirror, invert);
-
-            idata.Dispose();
-
-//            sculptMesh.DumpRaw(baseDir, primName, "primMesh");
+            sculptMesh = new PrimMesher.SculptMesh(
+                idata, sculptType, (int)lod, mirror, invert);
 
             coords = sculptMesh.coords;
             faces = sculptMesh.faces;
