@@ -31,7 +31,9 @@ using OpenMetaverse;
 using OpenMetaverse.Assets;
 using OpenMetaverse.Packets;
 using OpenMetaverse.Rendering;
+using OpenMetaverse.Imaging;
 using OpenSim.Framework;
+using OpenSim.Framework.SculptGeometry;
 using OpenSim.Region.CoreModules.World.Land;
 using OpenSim.Region.Framework.Interfaces;
 using OpenSim.Region.Framework.Scenes;
@@ -49,7 +51,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
-using System.Drawing;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -16687,16 +16688,40 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
                                 // Quirk: Generated sculpt mesh is about 2.8% smaller in X and Y than visual sculpt.
                                 else if (omvPrim.Sculpt != null && omvPrim.Sculpt.Type != SculptType.Mesh && sculptAsset != null)
                                 {
-                                    IJ2KDecoder imgDecoder = World.RequestModuleInterface<IJ2KDecoder>();
-                                    if (imgDecoder != null)
-                                    {
-                                        Image sculpt = imgDecoder.DecodeToImage(sculptAsset);
-                                        if (sculpt != null)
-                                        {
-                                            mesh = primMesher.GenerateFacetedSculptMesh(omvPrim, (Bitmap)sculpt, m_sculptLodInCastRay);
-                                            sculpt.Dispose();
-                                        }
-                                    }
+					ManagedImage sculptImage;
+					
+					if (OpenJPEG.DecodeToImage(sculptAsset, out sculptImage)
+					    && sculptImage != null)
+					{
+					    int sculptFlags = (int)omvPrim.Sculpt.Type;
+					
+					    SculptMesh.SculptType sculptType =
+					        (SculptMesh.SculptType)(sculptFlags & 7);
+					
+					    bool mirror = (sculptFlags & 0x80) != 0;
+					    bool invert = (sculptFlags & 0x40) != 0;
+					
+					    // Translate the renderer's detail level into the
+					    // resolution expected by our managed SculptMap.
+					    int lod = m_sculptLodInCastRay switch
+					    {
+					        DetailLevel.Lowest => 6,
+					        DetailLevel.Low => 8,
+					        DetailLevel.Medium => 16,
+					        DetailLevel.High => 32,
+					        DetailLevel.Highest => 64,
+					        _ => 16
+					    };
+					
+					    SculptMesh sculpt = new SculptMesh(
+					        sculptImage,
+					        sculptType,
+					        lod,
+					        mirror,
+					        invert);
+					
+					    mesh = FacetedMeshAdapter.Convert(omvPrim, sculpt);
+					}
                                 }
 
                                 // When part is shape, create mesh

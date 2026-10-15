@@ -36,8 +36,6 @@ using OpenSim.Region.Framework.Interfaces;
 using OpenSim.Region.PhysicsModules.SharedBase;
 using OpenMetaverse;
 using OpenMetaverse.StructuredData;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO.Compression;
 using PrimMesher;
 using log4net;
@@ -633,77 +631,32 @@ namespace OpenSim.Region.PhysicsModule.Meshing
             coords = new List<Coord>();
             faces = new List<Face>();
             PrimMesher.SculptMesh sculptMesh;
-            Image idata = null;
-            string decodedSculptFileName = "";
+            OpenMetaverse.Imaging.ManagedImage idata = null;
 
-            if (cacheSculptMaps && !primShape.SculptTexture.IsZero())
-            {
-                decodedSculptFileName = System.IO.Path.Combine(decodedSculptMapPath, "smap_" + primShape.SculptTexture.ToString());
-                try
-                {
-                    if (File.Exists(decodedSculptFileName))
-                    {
-                        idata = Image.FromFile(decodedSculptFileName);
-                    }
-                }
-                catch (Exception e)
-                {
-                    m_log.Error("[SCULPT]: unable to load cached sculpt map " + decodedSculptFileName + " " + e.Message);
-
-                }
-                //if (idata != null)
-                //    m_log.Debug("[SCULPT]: loaded cached map asset for map ID: " + primShape.SculptTexture.ToString());
-            }
-
-            if (idata == null)
-            {
-                if (primShape.SculptData == null || primShape.SculptData.Length == 0)
-                    return false;
-
-                try
-                {
-                    OpenMetaverse.Imaging.ManagedImage managedImage;
-
-                    OpenMetaverse.Imaging.OpenJPEG.DecodeToImage(primShape.SculptData, out managedImage);
-
-                    if (managedImage == null)
-                    {
-                        // In some cases it seems that the decode can return a null bitmap without throwing
-                        // an exception
-                        m_log.WarnFormat("[PHYSICS]: OpenJPEG decoded sculpt data for {0} to a null bitmap.  Ignoring.", primName);
-
-                        return false;
-                    }
-
-                    if ((managedImage.Channels & OpenMetaverse.Imaging.ManagedImage.ImageChannels.Alpha) != 0)
-                        managedImage.ConvertChannels(managedImage.Channels & ~OpenMetaverse.Imaging.ManagedImage.ImageChannels.Alpha);
-
-                    Bitmap imgData = OpenMetaverse.Imaging.LoadTGAClass.LoadTGA(new MemoryStream(managedImage.ExportTGA()));
-                    idata = (Image)imgData;
-                    managedImage = null;
-
-                    if (cacheSculptMaps)
-                    {
-                        try { idata.Save(decodedSculptFileName, ImageFormat.MemoryBmp); }
-                        catch (Exception e) { m_log.Error("[SCULPT]: unable to cache sculpt map " + decodedSculptFileName + " " + e.Message); }
-                    }
-                }
-                catch (DllNotFoundException)
-                {
-                    m_log.Error("[PHYSICS]: OpenJpeg is not installed correctly on this system. Physics Proxy generation failed.  Often times this is because of an old version of GLIBC.  You must have version 2.4 or above!");
-                    return false;
-                }
-                catch (IndexOutOfRangeException)
-                {
-                    m_log.Error("[PHYSICS]: OpenJpeg was unable to decode this. Physics Proxy generation failed");
-                    return false;
-                }
-                catch (Exception ex)
-                {
-                    m_log.Error("[PHYSICS]: Unable to generate a Sculpty physics proxy. Sculpty texture decode failed: " + ex.Message);
-                    return false;
-                }
-            }
+	    if (primShape.SculptData == null ||
+	        primShape.SculptData.Length == 0)
+	            return false;
+		
+		try
+		{
+		    if (!OpenMetaverse.Imaging.OpenJPEG.DecodeToImage(
+		            primShape.SculptData, out idata) || idata == null)
+		    {
+		        m_log.WarnFormat(
+		            "[PHYSICS]: Unable to decode sculpt data for {0}",
+		            primName);
+		
+		        return false;
+		    }
+		}
+		catch (Exception ex)
+		{
+		    m_log.ErrorFormat(
+		        "[PHYSICS]: Sculpt texture decode failed for {0}: {1}",
+		        primName, ex.Message);
+		
+		    return false;
+		}
 
             PrimMesher.SculptMesh.SculptType sculptType;
             switch ((OpenMetaverse.SculptType)primShape.SculptType)
@@ -728,9 +681,8 @@ namespace OpenSim.Region.PhysicsModule.Meshing
             bool mirror = ((primShape.SculptType & 128) != 0);
             bool invert = ((primShape.SculptType & 64) != 0);
 
-            sculptMesh = new PrimMesher.SculptMesh((Bitmap)idata, sculptType, (int)lod, false, mirror, invert);
-
-            idata.Dispose();
+            sculptMesh = new PrimMesher.SculptMesh(
+                idata, sculptType, (int)lod, false, mirror, invert); 
 
             sculptMesh.DumpRaw(baseDir, primName, "primMesh");
 

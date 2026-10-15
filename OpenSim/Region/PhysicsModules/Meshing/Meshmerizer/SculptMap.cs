@@ -25,103 +25,83 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// to build without references to System.Drawing, comment this out
-#define SYSTEM_DRAWING
-
 using System;
 using System.Collections.Generic;
-using System.Text;
-
-#if SYSTEM_DRAWING
-using System.Drawing;
-using System.Drawing.Imaging;
+using OpenMetaverse.Imaging;
 
 namespace PrimMesher
 {
     public class SculptMap
     {
-        public int width;
-        public int height;
-        public byte[] redBytes;
-        public byte[] greenBytes;
-        public byte[] blueBytes;
+        public int width, height;
+        public byte[] redBytes, greenBytes, blueBytes;
 
-        public SculptMap()
+        public SculptMap() { }
+
+        public SculptMap(ManagedImage image, int lod)
         {
-        }
+            if (image == null)
+                throw new ArgumentNullException(nameof(image));
 
-        public SculptMap(Bitmap bm, int lod)
-        {
-            int bmW = bm.Width;
-            int bmH = bm.Height;
+            int pixels = checked(image.Width * image.Height);
+            if (image.Width <= 0 || image.Height <= 0 ||
+                image.Red == null || image.Green == null || image.Blue == null ||
+                image.Red.Length < pixels ||
+                image.Green.Length < pixels ||
+                image.Blue.Length < pixels)
+                throw new ArgumentException("Invalid sculpt RGB image");
 
-            if (bmW == 0 || bmH == 0)
-                throw new Exception("SculptMap: bitmap has no data");
+            if (lod <= 0)
+                throw new ArgumentOutOfRangeException(nameof(lod));
 
-            int numLodPixels = lod * lod;  // (32 * 2)^2  = 64^2 pixels for default sculpt map image
+            long lodPixels = (long)lod * lod;
+            bool smallMap = (long)image.Width * image.Height <= lodPixels;
 
-            bool smallMap = bmW * bmH <= numLodPixels;
-            bool needsScaling = false;
+            width = image.Width;
+            height = image.Height;
 
-            width = bmW;
-            height = bmH;
-            while (width * height > numLodPixels * 4)
+            bool scale = false;
+            while ((long)width * height > lodPixels * 4)
             {
                 width >>= 1;
                 height >>= 1;
-                needsScaling = true;
+                scale = true;
+                if (width == 0 || height == 0)
+                    throw new ArgumentException("Invalid scaled dimensions");
             }
 
-            try
-            {
-                if (needsScaling)
-                    bm = ScaleImage(bm, width, height);
-            }
+            if (scale)
+                image = ScaleImage(image, width, height);
 
-            catch (Exception e)
-            {
-                throw new Exception("Exception in ScaleImage(): e: " + e.ToString());
-            }
-
-            if (width * height > numLodPixels)
+            if ((long)width * height > lodPixels)
             {
                 width >>= 1;
                 height >>= 1;
             }
 
-            int numBytes = (width + 1) * (height + 1);
-            redBytes = new byte[numBytes];
-            greenBytes = new byte[numBytes];
-            blueBytes = new byte[numBytes];
+            int count = checked((width + 1) * (height + 1));
+            redBytes = new byte[count];
+            greenBytes = new byte[count];
+            blueBytes = new byte[count];
 
-            int byteNdx = 0;
-
-            try
+            int dest = 0;
+            for (int y = 0; y <= height; y++)
             {
-                for (int y = 0; y <= height; y++)
+                for (int x = 0; x <= width; x++)
                 {
-                    for (int x = 0; x <= width; x++)
-                    {
-                        Color c;
+                    int sx = smallMap
+                        ? (x < width ? x : x - 1)
+                        : (x < width ? x * 2 : x * 2 - 1);
+                    int sy = smallMap
+                        ? (y < height ? y : y - 1)
+                        : (y < height ? y * 2 : y * 2 - 1);
 
-                        if (smallMap)
-                            c = bm.GetPixel(x < width ? x : x - 1,
-                                            y < height ? y : y - 1);
-                        else
-                            c = bm.GetPixel(x < width ? x * 2 : x * 2 - 1,
-                                            y < height ? y * 2 : y * 2 - 1);
-
-                        redBytes[byteNdx] = c.R;
-                        greenBytes[byteNdx] = c.G;
-                        blueBytes[byteNdx] = c.B;
-
-                        ++byteNdx;
-                    }
+                    int src = checked(sy * image.Width + sx);
+                    redBytes[dest] = image.Red[src];
+                    greenBytes[dest] = image.Green[src];
+                    blueBytes[dest] = image.Blue[src];
+                    dest++;
                 }
-            }
-            catch (Exception e)
-            {
-                throw new Exception("Caught exception processing byte arrays in SculptMap(): e: " + e.ToString());
             }
 
             width++;
@@ -130,43 +110,35 @@ namespace PrimMesher
 
         public List<List<Coord>> ToRows(bool mirror)
         {
-            int numRows = height;
-            int numCols = width;
+            List<List<Coord>> rows = new List<List<Coord>>(height);
+            const float scale = 1.0f / 255;
+            int index = 0;
 
-            List<List<Coord>> rows = new List<List<Coord>>(numRows);
-
-            float pixScale = 1.0f / 255;
-
-            int rowNdx, colNdx;
-            int smNdx = 0;
-
-
-            for (rowNdx = 0; rowNdx < numRows; rowNdx++)
+            for (int y = 0; y < height; y++)
             {
-                List<Coord> row = new List<Coord>(numCols);
-                for (colNdx = 0; colNdx < numCols; colNdx++)
+                List<Coord> row = new List<Coord>(width);
+                for (int x = 0; x < width; x++)
                 {
-
-                    if (mirror)
-                        row.Add(new Coord(-((float)redBytes[smNdx] * pixScale - 0.5f), ((float)greenBytes[smNdx] * pixScale - 0.5f), (float)blueBytes[smNdx] * pixScale - 0.5f));
-                    else
-                        row.Add(new Coord((float)redBytes[smNdx] * pixScale - 0.5f, (float)greenBytes[smNdx] * pixScale - 0.5f, (float)blueBytes[smNdx] * pixScale - 0.5f));
-
-                    ++smNdx;
+                    float r = redBytes[index] * scale - 0.5f;
+                    float g = greenBytes[index] * scale - 0.5f;
+                    float b = blueBytes[index] * scale - 0.5f;
+                    row.Add(new Coord(mirror ? -r : r, g, b));
+                    index++;
                 }
                 rows.Add(row);
             }
             return rows;
         }
 
-        private Bitmap ScaleImage(Bitmap srcImage, int destWidth, int destHeight)
+        private static ManagedImage ScaleImage(
+            ManagedImage source, int destWidth, int destHeight)
         {
+            ManagedImage result = new ManagedImage(
+                destWidth, destHeight, ManagedImage.ImageChannels.Color);
 
-            Bitmap scaledImage = new Bitmap(destWidth, destHeight, PixelFormat.Format24bppRgb);
-
-            Color c;
-            float xscale = srcImage.Width / destWidth;
-            float yscale = srcImage.Height / destHeight;
+            // Preserve original integer-division scaling.
+            float xscale = source.Width / destWidth;
+            float yscale = source.Height / destHeight;
 
             float sy = 0.5f;
             for (int y = 0; y < destHeight; y++)
@@ -174,24 +146,17 @@ namespace PrimMesher
                 float sx = 0.5f;
                 for (int x = 0; x < destWidth; x++)
                 {
-                    try
-                    {
-                        c = srcImage.GetPixel((int)(sx), (int)(sy));
-                        scaledImage.SetPixel(x, y, Color.FromArgb(c.R, c.G, c.B));
-                    }
-                    catch (IndexOutOfRangeException)
-                    {
-                    }
-
+                    int src = (int)sy * source.Width + (int)sx;
+                    int dst = y * destWidth + x;
+                    result.Red[dst] = source.Red[src];
+                    result.Green[dst] = source.Green[src];
+                    result.Blue[dst] = source.Blue[src];
                     sx += xscale;
                 }
                 sy += yscale;
             }
-            srcImage.Dispose();
-            return scaledImage;
+            return result;
         }
-
     }
+}
 
-    }
-#endif

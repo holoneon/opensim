@@ -27,7 +27,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -181,27 +180,6 @@ namespace OpenSim.Region.CoreModules.Agent.TextureSender
         {
             return DoJ2KDecode(assetID, j2kData, out layers, out components);
         }
-
-        public Image DecodeToImage(byte[] j2kData)
-        {
-            if (m_useCSJ2K)
-            { 
-                return J2kImage.FromBytes(j2kData);
-            }
-            else
-            {
-                ManagedImage mimage;
-                Image image;
-                if (OpenJPEG.DecodeToImage(j2kData, out mimage, out image))
-                {
-                    mimage = null;
-                    return image;
-                }
-                else
-                    return null;
-            }
-        }
-
 
         #endregion IJ2KDecoder
 

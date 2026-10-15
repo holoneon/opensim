@@ -25,18 +25,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// to build without references to System.Drawing, comment this out
-#define SYSTEM_DRAWING
-
 using System;
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
-
-#if SYSTEM_DRAWING
-using System.Drawing;
-using System.Drawing.Imaging;
-#endif
+using OpenMetaverse.Imaging;
 
 namespace PrimMesher
 {
@@ -51,25 +44,6 @@ namespace PrimMesher
         public List<UVCoord> uvs;
 
         public enum SculptType { sphere = 1, torus = 2, plane = 3, cylinder = 4 };
-
-#if SYSTEM_DRAWING
-
-        public SculptMesh SculptMeshFromFile(string fileName, SculptType sculptType, int lod, bool viewerMode)
-        {
-            Bitmap bitmap = (Bitmap)Bitmap.FromFile(fileName);
-            SculptMesh sculptMesh = new SculptMesh(bitmap, sculptType, lod, viewerMode);
-            bitmap.Dispose();
-            return sculptMesh;
-        }
-
-
-        public SculptMesh(string fileName, int sculptType, int lod, int viewerMode, int mirror, int invert)
-        {
-            Bitmap bitmap = (Bitmap)Bitmap.FromFile(fileName);
-            _SculptMesh(bitmap, (SculptType)sculptType, lod, viewerMode != 0, mirror != 0, invert != 0);
-            bitmap.Dispose();
-        }
-#endif
 
         /// <summary>
         /// ** Experimental ** May disappear from future versions ** not recommeneded for use in applications
@@ -174,131 +148,43 @@ namespace PrimMesher
                 calcVertexNormals(SculptType.plane, numXElements, numYElements);
         }
 
-#if SYSTEM_DRAWING
-        public SculptMesh(Bitmap sculptBitmap, SculptType sculptType, int lod, bool viewerMode)
-        {
-            _SculptMesh(sculptBitmap, sculptType, lod, viewerMode, false, false);
-        }
+	public SculptMesh(ManagedImage image, SculptType sculptType,
+	                  int lod, bool viewerMode)
+	{
+	    _SculptMesh(image, sculptType, lod, viewerMode, false, false);
+	}
+	
+	public SculptMesh(ManagedImage image, SculptType sculptType,
+	                  int lod, bool viewerMode, bool mirror, bool invert)
+	{
+	    _SculptMesh(image, sculptType, lod, viewerMode, mirror, invert);
+	}
 
-        public SculptMesh(Bitmap sculptBitmap, SculptType sculptType, int lod, bool viewerMode, bool mirror, bool invert)
-        {
-            _SculptMesh(sculptBitmap, sculptType, lod, viewerMode, mirror, invert);
-        }
-#endif
+	public SculptMesh(
+	    List<List<Coord>> rows,
+	    SculptType sculptType,
+	    bool viewerMode,
+	    bool mirror,
+	    bool invert)
+	{
+	    _SculptMesh(rows, sculptType, viewerMode, mirror, invert);
+	}
 
-        public SculptMesh(List<List<Coord>> rows, SculptType sculptType, bool viewerMode, bool mirror, bool invert)
-        {
-            _SculptMesh(rows, sculptType, viewerMode, mirror, invert);
-        }
-
-#if SYSTEM_DRAWING
-        /// <summary>
-        /// converts a bitmap to a list of lists of coords, while scaling the image.
-        /// the scaling is done in floating point so as to allow for reduced vertex position
-        /// quantization as the position will be averaged between pixel values. this routine will
-        /// likely fail if the bitmap width and height are not powers of 2.
-        /// </summary>
-        /// <param name="bitmap"></param>
-        /// <param name="scale"></param>
-        /// <param name="mirror"></param>
-        /// <returns></returns>
-        private List<List<Coord>> bitmap2Coords(Bitmap bitmap, int scale, bool mirror)
-        {
-            int numRows = bitmap.Height / scale;
-            int numCols = bitmap.Width / scale;
-            List<List<Coord>> rows = new List<List<Coord>>(numRows);
-
-            float pixScale = 1.0f / (scale * scale);
-            pixScale /= 255;
-
-            int imageX, imageY = 0;
-
-            int rowNdx, colNdx;
-
-            for (rowNdx = 0; rowNdx < numRows; rowNdx++)
-            {
-                List<Coord> row = new List<Coord>(numCols);
-                for (colNdx = 0; colNdx < numCols; colNdx++)
-                {
-                    imageX = colNdx * scale;
-                    int imageYStart = rowNdx * scale;
-                    int imageYEnd = imageYStart + scale;
-                    int imageXEnd = imageX + scale;
-                    float rSum = 0.0f;
-                    float gSum = 0.0f;
-                    float bSum = 0.0f;
-                    for (; imageX < imageXEnd; imageX++)
-                    {
-                        for (imageY = imageYStart; imageY < imageYEnd; imageY++)
-                        {
-                            Color c = bitmap.GetPixel(imageX, imageY);
-                            if (c.A != 255)
-                            {
-                                bitmap.SetPixel(imageX, imageY, Color.FromArgb(255, c.R, c.G, c.B));
-                                c = bitmap.GetPixel(imageX, imageY);
-                            }
-                            rSum += c.R;
-                            gSum += c.G;
-                            bSum += c.B;
-                        }
-                    }
-                    if (mirror)
-                        row.Add(new Coord(-(rSum * pixScale - 0.5f), gSum * pixScale - 0.5f, bSum * pixScale - 0.5f));
-                    else
-                        row.Add(new Coord(rSum * pixScale - 0.5f, gSum * pixScale - 0.5f, bSum * pixScale - 0.5f));
-
-                }
-                rows.Add(row);
-            }
-            return rows;
-        }
-
-        private List<List<Coord>> bitmap2CoordsSampled(Bitmap bitmap, int scale, bool mirror)
-        {
-            int numRows = bitmap.Height / scale;
-            int numCols = bitmap.Width / scale;
-            List<List<Coord>> rows = new List<List<Coord>>(numRows);
-
-            float pixScale = 1.0f / 256.0f;
-
-            int imageX, imageY = 0;
-
-            int rowNdx, colNdx;
-
-            for (rowNdx = 0; rowNdx <= numRows; rowNdx++)
-            {
-                List<Coord> row = new List<Coord>(numCols);
-                imageY = rowNdx * scale;
-                if (rowNdx == numRows) imageY--;
-                for (colNdx = 0; colNdx <= numCols; colNdx++)
-                {
-                    imageX = colNdx * scale;
-                    if (colNdx == numCols) imageX--;
-
-                    Color c = bitmap.GetPixel(imageX, imageY);
-                    if (c.A != 255)
-                    {
-                        bitmap.SetPixel(imageX, imageY, Color.FromArgb(255, c.R, c.G, c.B));
-                        c = bitmap.GetPixel(imageX, imageY);
-                    }
-
-                    if (mirror)
-                        row.Add(new Coord(-(c.R * pixScale - 0.5f), c.G * pixScale - 0.5f, c.B * pixScale - 0.5f));
-                    else
-                        row.Add(new Coord(c.R * pixScale - 0.5f, c.G * pixScale - 0.5f, c.B * pixScale - 0.5f));
-
-                }
-                rows.Add(row);
-            }
-            return rows;
-        }
-
-
-        void _SculptMesh(Bitmap sculptBitmap, SculptType sculptType, int lod, bool viewerMode, bool mirror, bool invert)
-        {
-            _SculptMesh(new SculptMap(sculptBitmap, lod).ToRows(mirror), sculptType, viewerMode, mirror, invert);
-        }
-#endif
+	private void _SculptMesh(
+	    ManagedImage image,
+	    SculptType sculptType,
+	    int lod,
+	    bool viewerMode,
+	    bool mirror,
+	    bool invert)
+	{
+	    _SculptMesh(
+	        new SculptMap(image, lod).ToRows(mirror),
+	        sculptType,
+	        viewerMode,
+	        mirror,
+	        invert);
+	}
 
         void _SculptMesh(List<List<Coord>> rows, SculptType sculptType, bool viewerMode, bool mirror, bool invert)
         {
@@ -644,3 +530,4 @@ namespace PrimMesher
         }
     }
 }
+
