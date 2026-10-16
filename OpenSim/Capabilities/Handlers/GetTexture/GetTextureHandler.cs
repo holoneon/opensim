@@ -28,8 +28,6 @@
 using System;
 using System.Collections;
 using System.Collections.Specialized;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Reflection;
 using System.IO;
 using System.Web;
@@ -39,6 +37,7 @@ using OpenMetaverse;
 using OpenMetaverse.StructuredData;
 using OpenMetaverse.Imaging;
 using OpenSim.Framework;
+using OpenSim.Framework.Imaging;
 using OpenSim.Framework.Servers;
 using OpenSim.Framework.Servers.HttpServer;
 using OpenSim.Region.Framework.Interfaces;
@@ -291,75 +290,18 @@ namespace OpenSim.Capabilities.Handlers
 
         private byte[] ConvertTextureData(AssetBase texture, string format)
         {
-            m_log.DebugFormat("[GETTEXTURE]: Converting texture {0} to {1}", texture.ID, format);
-            byte[] data = Array.Empty<byte>();
-
-            MemoryStream imgstream = new MemoryStream();
-            Bitmap mTexture = null;
-            ManagedImage managedImage = null;
-            Image image = null;
-
             try
             {
-                // Taking our jpeg2000 data, decoding it, then saving it to a byte array with regular data
-
-                // Decode image to System.Drawing.Image
-                if (OpenJPEG.DecodeToImage(texture.Data, out managedImage, out image) && image != null)
-                {
-                    // Save to bitmap
-                    mTexture = new Bitmap(image);
-
-                    using(EncoderParameters myEncoderParameters = new EncoderParameters())
-                    {
-                        myEncoderParameters.Param[0] = new EncoderParameter(Encoder.Quality,95L);
-
-                        // Save bitmap to stream
-                        ImageCodecInfo codec = GetEncoderInfo("image/" + format);
-                        if (codec != null)
-                        {
-                            mTexture.Save(imgstream, codec, myEncoderParameters);
-                        // Write the stream to a byte array for output
-                            data = imgstream.ToArray();
-                        }
-                        else
-                            m_log.WarnFormat("[GETTEXTURE]: No such codec {0}", format);
-                    }
-                }
+                return ManagedTextureEncoder.Convert(texture.Data, format);
             }
             catch (Exception e)
             {
-                m_log.WarnFormat("[GETTEXTURE]: Unable to convert texture {0} to {1}: {2}", texture.ID, format, e.Message);
+                m_log.WarnFormat(
+                    "[GETTEXTURE]: Unable to convert texture {0} to {1}: {2}",
+                    texture.ID, format, e.Message);
+        
+                return Array.Empty<byte>();
             }
-            finally
-            {
-                // Reclaim memory, these are unmanaged resources
-                // If we encountered an exception, one or more of these will be null
-                if (mTexture != null)
-                    mTexture.Dispose();
-
-                if (image != null)
-                    image.Dispose();
-
-                if(managedImage != null)
-                    managedImage.Clear();
-                if (imgstream != null)
-                    imgstream.Dispose();
-            }
-
-            return data;
-        }
-
-        // From msdn
-        private static ImageCodecInfo GetEncoderInfo(String mimeType)
-        {
-            ImageCodecInfo[] encoders;
-            encoders = ImageCodecInfo.GetImageEncoders();
-            for (int j = 0; j < encoders.Length; ++j)
-            {
-                if (encoders[j].MimeType == mimeType)
-                    return encoders[j];
-            }
-            return null;
         }
     }
 }
