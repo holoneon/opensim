@@ -28,7 +28,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Drawing;
+using SkiaSharp;
 using System.IO;
 using System.Net;
 using System.Reflection;
@@ -188,10 +188,27 @@ namespace OpenSim.Services.Connectors.Hypergrid
 
                 byte[] imageData = null;
 
-                using (Bitmap bitmap = new Bitmap(filename))
+                using (SKBitmap bitmap = SKBitmap.Decode(filename))
                 {
-                    //m_log.Debug("Size: " + m.PhysicalDimension.Height + "-" + m.PhysicalDimension.Width);
-                    imageData = OpenJPEG.EncodeFromImage(bitmap, false);
+                    if (bitmap == null)
+                        throw new InvalidDataException("Cannot decode map image: " + filename);
+
+                    ManagedImage managed = new ManagedImage(
+                        bitmap.Width, bitmap.Height, ManagedImage.ImageChannels.Color);
+
+                    for (int y = 0; y < bitmap.Height; ++y)
+                    {
+                        for (int x = 0; x < bitmap.Width; ++x)
+                        {
+                            SKColor pixel = bitmap.GetPixel(x, y);
+                            int index = y * bitmap.Width + x;
+                            managed.Red[index] = pixel.Red;
+                            managed.Green[index] = pixel.Green;
+                            managed.Blue[index] = pixel.Blue;
+                        }
+                    }
+
+                    imageData = OpenJPEG.Encode(managed, false);
                 }
 
                 AssetBase ass = new AssetBase(UUID.Random(), "region " + name, (sbyte)AssetType.Texture, regionID.ToString());
@@ -206,9 +223,9 @@ namespace OpenSim.Services.Connectors.Hypergrid
                 // finally
                 mapTile = ass.FullID;
             }
-            catch // LEGIT: Catching problems caused by OpenJPEG p/invoke
+            catch (Exception e)
             {
-                m_log.Info("[GATEKEEPER SERVICE CONNECTOR]: Failed getting/storing map image, because it is probably already in the cache");
+                m_log.WarnFormat("[GATEKEEPER SERVICE CONNECTOR]: Failed getting/storing map image: {0}", e);
             }
             return mapTile;
         }
@@ -342,3 +359,4 @@ namespace OpenSim.Services.Connectors.Hypergrid
         }
     }
 }
+

@@ -180,27 +180,47 @@ namespace OpenSim.ApplicationPlugins.RegionModulesController
 
             loadedModuleData = loadedModules[node.Addin];
 
-            if (node.Type.GetInterface(typeof(ISharedRegionModule).ToString()) != null)
+            m_log.WarnFormat(
+                "[ADDIN DEBUG] ID={0}, TypeName={1}, Addin={2}",
+                node.Id,
+                node.TypeName,
+                node.Addin);
+
+            Type moduleType;
+            try
+            {
+                moduleType = node.Type;
+                m_log.WarnFormat("[ADDIN DEBUG] Resolved {0} from {1}",
+                    moduleType.FullName, moduleType.Assembly.Location);
+            }
+            catch (Exception e)
+            {
+                m_log.ErrorFormat("[ADDIN DEBUG] Failed to resolve {0}: {1}",
+                    node.TypeName, e);
+                throw;
+            }
+
+            if (moduleType.GetInterface(typeof(ISharedRegionModule).ToString()) != null)
             {
                 if (CheckModuleEnabled(node, modulesConfig))
                 {
-                    m_log.DebugFormat("[REGIONMODULES]: Found shared region module {0}, class {1}", node.Id, node.Type);
+                    m_log.DebugFormat("[REGIONMODULES]: Found shared region module {0}, class {1}", node.Id, moduleType);
                     m_sharedModules.Add(node);
                     loadedModuleData[0]++;
                 }
             }
-            else if (node.Type.GetInterface(typeof(INonSharedRegionModule).ToString()) != null)
+            else if (moduleType.GetInterface(typeof(INonSharedRegionModule).ToString()) != null)
             {
                 if (CheckModuleEnabled(node, modulesConfig))
                 {
-                    m_log.DebugFormat("[REGIONMODULES]: Found non-shared region module {0}, class {1}", node.Id, node.Type);
+                    m_log.DebugFormat("[REGIONMODULES]: Found non-shared region module {0}, class {1}", node.Id, moduleType);
                     m_nonSharedModules.Add(node);
                     loadedModuleData[1]++;
                 }
             }
             else
             {
-                m_log.WarnFormat("[REGIONMODULES]: Found unknown type of module {0}, class {1}", node.Id, node.Type);
+                m_log.WarnFormat("[REGIONMODULES]: Found unknown type of module {0}, class {1}", node.Id, moduleType);
                 loadedModuleData[2]++;
             }
         }
@@ -514,3 +534,5 @@ namespace OpenSim.ApplicationPlugins.RegionModulesController
 
     }
 }
+
+

@@ -504,6 +504,7 @@
       <Reference name="OpenMetaverse"/>
       <Reference name="OpenMetaverse.StructuredData"/>
       <Reference name="Mono.Addins"/>
+      <Reference name="SkiaSharp"/>
       <Reference name="OpenSim.Data"/>
       <Reference name="OpenSim.Framework"/>
       <Reference name="OpenSim.Capabilities"/>
@@ -1330,8 +1331,8 @@
       <Reference name="OpenMetaverseTypes"/>
       <Reference name="OpenMetaverse.StructuredData"/>
       <Reference name="OpenMetaverse"/>
+      <Reference name="SkiaSharp"/>
       <Reference name="CSJ2K"/>
-      <Reference name="Warp3D"/>
       <Reference name="OpenSim.Capabilities"/>
       <Reference name="OpenSim.Framework"/>
       <Reference name="OpenSim.Framework.Console"/>

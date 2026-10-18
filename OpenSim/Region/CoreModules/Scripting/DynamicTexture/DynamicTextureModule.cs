@@ -27,9 +27,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
+using SkiaSharp;
 using Nini.Config;
 using OpenMetaverse;
 using OpenMetaverse.Imaging;
@@ -483,8 +481,11 @@ namespace OpenSim.Region.CoreModules.Scripting.DynamicTexture
                 if (part == null || data == null || data.Length <= 1)
                 {
                     string msg = string.Format("DynamicTextureModule: Error preparing image using URL {0}", Url);
-                    scene.SimChat(Utils.StringToBytes(msg), ChatTypeEnum.Say,
-                                  0, part.ParentGroup.RootPart.AbsolutePosition, part.Name, part.UUID, false);
+                    if (part != null)
+                        scene.SimChat(Utils.StringToBytes(msg), ChatTypeEnum.Say,
+                                      0, part.ParentGroup.RootPart.AbsolutePosition, part.Name, part.UUID, false);
+                    else
+                        m_log.WarnFormat("[DYNAMICTEXTUREMODULE]: {0}; prim {1} no longer exists", msg, PrimID);
 
                     return UUID.Zero;
                 }
@@ -554,153 +555,129 @@ namespace OpenSim.Region.CoreModules.Scripting.DynamicTexture
                 return asset.FullID;
             }
 
+            // Decode JPEG2000 directly to ManagedImage. No System.Drawing/GDI+.
+            private static SKBitmap ToSkBitmap(ManagedImage image)
+            {
+                int width = image.Width;
+                int height = image.Height;
+                SKBitmap bitmap = new SKBitmap(
+                    new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+
+                bool hasAlpha = image.Alpha != null && image.Alpha.Length >= width * height;
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        int i = y * width + x;
+                        bitmap.SetPixel(x, y, new SKColor(
+                            image.Red[i], image.Green[i], image.Blue[i],
+                            hasAlpha ? image.Alpha[i] : (byte)255));
+                    }
+                }
+                return bitmap;
+            }
+
+            private static ManagedImage ToManagedImage(SKBitmap bitmap)
+            {
+                int width = bitmap.Width;
+                int height = bitmap.Height;
+                ManagedImage image = new ManagedImage(
+                    width, height,
+                    ManagedImage.ImageChannels.Color | ManagedImage.ImageChannels.Alpha);
+
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        int i = y * width + x;
+                        SKColor c = bitmap.GetPixel(x, y);
+                        image.Red[i] = c.Red;
+                        image.Green[i] = c.Green;
+                        image.Blue[i] = c.Blue;
+                        image.Alpha[i] = c.Alpha;
+                    }
+                }
+                return image;
+            }
+
             private byte[] BlendTextures(byte[] frontImage, byte[] backImage, byte newAlpha)
             {
-                ManagedImage managedImage;
-                Image image;
+                try
+                {
+                    if (!OpenJPEG.DecodeToImage(frontImage, out ManagedImage front))
+                        return null;
 
-                if (!OpenJPEG.DecodeToImage(frontImage, out managedImage, out image) || image == null)
+                    using SKBitmap frontBitmap = ToSkBitmap(front);
+
+                    if (backImage == null)
+                    {
+                        // Apply the requested opacity to the source's existing alpha.
+                        using SKBitmap output = new SKBitmap(
+                            new SKImageInfo(frontBitmap.Width, frontBitmap.Height,
+                                SKColorType.Rgba8888, SKAlphaType.Unpremul));
+
+                        using (SKCanvas canvas = new SKCanvas(output))
+                        using (SKPaint paint = new SKPaint
+                        {
+                            Color = new SKColor(255, 255, 255, newAlpha),
+                            BlendMode = SKBlendMode.Src
+                        })
+                        {
+                            canvas.Clear(SKColors.Transparent);
+                            canvas.DrawBitmap(frontBitmap, 0, 0, paint);
+                        }
+
+                        return OpenJPEG.Encode(ToManagedImage(output), false);
+                    }
+
+                    if (!OpenJPEG.DecodeToImage(backImage, out ManagedImage back))
+                        return null;
+
+                    using SKBitmap backBitmap = ToSkBitmap(back);
+                    using SKBitmap joint = new SKBitmap(
+                        new SKImageInfo(backBitmap.Width, backBitmap.Height,
+                            SKColorType.Rgba8888, SKAlphaType.Unpremul));
+
+                    using (SKCanvas canvas = new SKCanvas(joint))
+                    {
+                        canvas.Clear(SKColors.Transparent);
+                        using (SKPaint backgroundPaint = new SKPaint
+                        {
+                            BlendMode = SKBlendMode.Src
+                        })
+                        {
+                            canvas.DrawBitmap(backBitmap, 0, 0, backgroundPaint);
+                        }
+
+                        if (newAlpha > 0)
+                        {
+                            using SKPaint foregroundPaint = new SKPaint
+                            {
+                                Color = new SKColor(255, 255, 255, newAlpha),
+                                BlendMode = SKBlendMode.SrcOver,
+                                IsAntialias = true
+                            };
+                            // Match the original GDI implementation: scale the
+                            // front image to the back image's dimensions.
+                            canvas.DrawBitmap(frontBitmap,
+                                new SKRect(0, 0, joint.Width, joint.Height),
+                                foregroundPaint);
+                        }
+                    }
+
+                    return OpenJPEG.Encode(ToManagedImage(joint), false);
+                }
+                catch (Exception e)
+                {
+                    m_log.ErrorFormat(
+                        "[DYNAMICTEXTUREMODULE]: JPEG2000 texture blending failed: {0}", e);
                     return null;
-
-                Bitmap image1 = new Bitmap(image);
-                image.Dispose();
-
-                if(backImage == null)
-                {
-                    SetAlpha(ref image1, newAlpha);
-                    byte[] result = Array.Empty<byte>();
-
-                    try
-                    {
-                        result = OpenJPEG.EncodeFromImage(image1, false);
-                    }
-                    catch (Exception e)
-                    {
-                        m_log.ErrorFormat(
-                        "[DYNAMICTEXTUREMODULE]: OpenJpeg Encode Failed.  Exception {0}{1}",
-                            e.Message, e.StackTrace);
-                    }
-                    image1.Dispose();
-                    return result;
-                }
-
-                if (!OpenJPEG.DecodeToImage(backImage, out managedImage, out image) || image == null)
-                {
-                    image1.Dispose();
-                    return null;
-                }
-
-                Bitmap image2 = new Bitmap(image);
-                image.Dispose();
-
-                using(Bitmap joint = MergeBitMaps(image1, image2, newAlpha))
-                {
-                    image1.Dispose();
-                    image2.Dispose();
-
-                    byte[] result = Array.Empty<byte>();
-
-                    try
-                    {
-                        result = OpenJPEG.EncodeFromImage(joint, false);
-                    }
-                    catch (Exception e)
-                    {
-                        m_log.ErrorFormat(
-                        "[DYNAMICTEXTUREMODULE]: OpenJpeg Encode Failed.  Exception {0}{1}",
-                            e.Message, e.StackTrace);
-                    }
-
-                    return result;
                 }
             }
 
-            public Bitmap MergeBitMaps(Bitmap front, Bitmap back, byte alpha)
-            {
-                Bitmap joint;
-                Graphics jG;
-                int Width = back.Width;
-                int Height = back.Height;
-
-                PixelFormat format;
-                if(alpha < 255 || front.PixelFormat == PixelFormat.Format32bppArgb || back.PixelFormat == PixelFormat.Format32bppArgb)
-                    format = PixelFormat.Format32bppArgb;
-                else
-                    format = PixelFormat.Format32bppRgb;
-
-                joint = new Bitmap(Width, Height, format);
-
-                if (alpha >= 255)
-                {
-                    using (jG = Graphics.FromImage(joint))
-                    {
-                        jG.CompositingQuality = CompositingQuality.HighQuality;
-
-                        jG.CompositingMode = CompositingMode.SourceCopy;
-                        jG.DrawImage(back, 0, 0, Width, Height);
-
-                        jG.CompositingMode = CompositingMode.SourceOver;
-                        jG.DrawImage(front, 0, 0, Width, Height);
-                        return joint;
-                    }
-                }
-
-                using (jG = Graphics.FromImage(joint))
-                {
-                    jG.CompositingQuality = CompositingQuality.HighQuality;
-                    jG.CompositingMode = CompositingMode.SourceCopy;
-                    jG.DrawImage(back, 0, 0, Width, Height);
-
-                    if (alpha > 0)
-                    {
-                        ColorMatrix matrix = new ColorMatrix(new float[][]{
-                            new float[] {1F, 0, 0, 0, 0},
-                            new float[] {0, 1F, 0, 0, 0},
-                            new float[] {0, 0, 1F, 0, 0},
-                            new float[] {0, 0, 0, alpha/255f, 0},
-                            new float[] {0, 0, 0, 0, 1F}});
-
-                        ImageAttributes imageAttributes = new ImageAttributes();
-                        imageAttributes.SetColorMatrix(matrix);
-
-                        jG.CompositingMode = CompositingMode.SourceOver;
-                        jG.DrawImage(front, new Rectangle(0, 0, Width, Height), 0, 0, front.Width, front.Height, GraphicsUnit.Pixel, imageAttributes);
-                    }
-
-                    return joint;
-                }
-            }
-
-            private void SetAlpha(ref Bitmap b, byte alpha)
-            {
-                int Width = b.Width;
-                int Height = b.Height;
-                Bitmap joint = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
-                if(alpha > 0)
-                {
-                    ColorMatrix matrix = new ColorMatrix(new float[][]{
-                    new float[] {1F, 0, 0, 0, 0},
-                    new float[] {0, 1F, 0, 0, 0},
-                    new float[] {0, 0, 1F, 0, 0},
-                    new float[] {0, 0, 0, alpha/255f, 0},
-                    new float[] {0, 0, 0, 0, 1F}});
-
-                    ImageAttributes imageAttributes = new ImageAttributes();
-                    imageAttributes.SetColorMatrix(matrix);
-
-                    using (Graphics jG = Graphics.FromImage(joint))
-                    {
-                        jG.CompositingQuality = CompositingQuality.HighQuality;
-                        jG.CompositingMode = CompositingMode.SourceCopy;
-                        jG.DrawImage(b, new Rectangle(0, 0, Width, Height), 0, 0, Width, Height, GraphicsUnit.Pixel, imageAttributes);
-                    }
-                }
-                Bitmap t = b;
-                b = joint;
-                t.Dispose();
-            }
         }
 
         #endregion
     }
 }
+

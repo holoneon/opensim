@@ -25,10 +25,11 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+using SkiaSharp;
 using System;
-using System.Drawing;
 using System.IO;
 using System.Net;
+using System.Drawing;
 using Nini.Config;
 using OpenMetaverse;
 using OpenMetaverse.Imaging;
@@ -209,47 +210,65 @@ namespace OpenSim.Region.CoreModules.Scripting.LoadImageURL
                     {
                         try
                         {
-                            using(Bitmap image = new Bitmap(stream))
+                            using (SKBitmap image = SKBitmap.Decode(stream))
                             {
-                                // TODO: make this a bit less hard coded
-                                if((image.Height < 64) && (image.Width < 64))
-                                {
-                                    newSize.Width = 32;
-                                    newSize.Height = 32;
-                                }
-                                else if((image.Height < 128) && (image.Width < 128))
-                                {
-                                    newSize.Width = 64;
-                                    newSize.Height = 64;
-                                }
-                                else if((image.Height < 256) && (image.Width < 256))
-                                {
-                                    newSize.Width = 128;
-                                    newSize.Height = 128;
-                                }
-                                else if((image.Height < 512 && image.Width < 512))
-                                {
-                                    newSize.Width = 256;
-                                    newSize.Height = 256;
-                                }
-                                else if((image.Height < 1024 && image.Width < 1024))
-                                {
-                                    newSize.Width = 512;
-                                    newSize.Height = 512;
-                                }
+                                if (image == null)
+                                    throw new InvalidOperationException("Unable to decode image");
+                            
+                                // Preserve the original OpenSim sizing rules.
+                                if (image.Height < 64 && image.Width < 64)
+                                    newSize = new Size(32, 32);
+                                else if (image.Height < 128 && image.Width < 128)
+                                    newSize = new Size(64, 64);
+                                else if (image.Height < 256 && image.Width < 256)
+                                    newSize = new Size(128, 128);
+                                else if (image.Height < 512 && image.Width < 512)
+                                    newSize = new Size(256, 256);
+                                else if (image.Height < 1024 && image.Width < 1024)
+                                    newSize = new Size(512, 512);
                                 else
+                                    newSize = new Size(1024, 1024);
+                            
+                                using SKBitmap resized = new SKBitmap(
+                                    newSize.Width,
+                                    newSize.Height,
+                                    SKColorType.Rgba8888,
+                                    SKAlphaType.Unpremul);
+                            
+                                using (SKCanvas canvas = new SKCanvas(resized))
                                 {
-                                    newSize.Width = 1024;
-                                    newSize.Height = 1024;
+                                    canvas.Clear(SKColors.Transparent);
+                            
+                                    canvas.DrawBitmap(
+                                        image,
+                                        new SKRect(0, 0, newSize.Width, newSize.Height));
+                            
+                                    canvas.Flush();
                                 }
-
-                                if(newSize.Width != image.Width || newSize.Height != image.Height)
+                            
+                                ManagedImage managed = new ManagedImage(
+                                    newSize.Width,
+                                    newSize.Height,
+                                    ManagedImage.ImageChannels.Color | ManagedImage.ImageChannels.Alpha);
+                            
+                                int width = newSize.Width;
+                                int height = newSize.Height;
+                            
+                                for (int y = 0; y < height; y++)
                                 {
-                                    using(Bitmap resize = new Bitmap(image, newSize))
-                                     imageJ2000 = OpenJPEG.EncodeFromImage(resize, false);
+                                    for (int x = 0; x < width; x++)
+                                    {
+                                        SKColor pixel = resized.GetPixel(x, y);
+                                        int index = y * width + x;
+                            
+                                        managed.Red[index] = pixel.Red;
+                                        managed.Green[index] = pixel.Green;
+                                        managed.Blue[index] = pixel.Blue;
+                                        managed.Alpha[index] = pixel.Alpha;
+                                    }
                                 }
-                                else
-                                    imageJ2000 = OpenJPEG.EncodeFromImage(image, false);
+                            
+                                imageJ2000 = OpenJPEG.Encode(managed, false);
                             }
                         }
                         catch (Exception)
@@ -294,7 +313,7 @@ namespace OpenSim.Region.CoreModules.Scripting.LoadImageURL
                         m_textureManager.ReturnData(
                             state.RequestID,
                             new OpenSim.Region.CoreModules.Scripting.DynamicTexture.DynamicTexture(
-                            request.RequestUri, null, imageJ2000, newSize, false));
+                            request.RequestUri.ToString(), null, imageJ2000, newSize, false));
                     }
                     response.Close();
                 }

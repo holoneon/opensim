@@ -27,7 +27,7 @@
 
 using System;
 using System.Drawing;
-using System.Drawing.Imaging;
+using SkiaSharp;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -56,7 +56,7 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
 
         private static readonly ILog m_log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         private static object thisLock = new object();
-        private static Graphics m_graph = null; // just to get chars sizes
+        private string m_fallbackFontFile = "";
 
         private Scene m_scene;
         private IDynamicTextureManager m_textureManager;
@@ -121,17 +121,12 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
         public void GetDrawStringSize(string text, string fontName, int fontSize,
                                       out double xSize, out double ySize)
         {
-            lock (thisLock)
-            {
-                using (Font myFont = new Font(fontName, fontSize))
-                {
-                    SizeF stringSize = new SizeF();
+            using SKTypeface face = SKTypeface.FromFamilyName(fontName) ?? SKTypeface.Default;
+            using SKFont font = new SKFont(face, fontSize);
+            xSize = font.MeasureText(text ?? string.Empty);
+            SKFontMetrics metrics = font.Metrics;
+            ySize = metrics.Descent - metrics.Ascent;
 
-                    stringSize = m_graph.MeasureString(text, myFont);
-                    xSize = stringSize.Width;
-                    ySize = stringSize.Height;
-                }
-            }
         }
 
         #endregion
@@ -144,19 +139,11 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
             if (null != cfg)
             {
                 m_fontName = cfg.GetString("font_name", m_fontName);
+                m_fallbackFontFile = cfg.GetString("fallback_font_file", "").Trim();
             }
             m_log.DebugFormat("[VECTORRENDERMODULE]: using font \"{0}\" for text rendering.", m_fontName);
 
-            // We won't dispose of these explicitly since this module is only removed when the entire simulator
-            // is shut down.
-            lock(thisLock)
-            {
-                if(m_graph == null)
-                {
-                    Bitmap bitmap = new Bitmap(32, 32, PixelFormat.Format32bppArgb);
-                    m_graph = Graphics.FromImage(bitmap);
-                }
-            }
+
         }
 
         public void PostInitialise()
@@ -210,7 +197,7 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
             int width = 256;
             int height = 256;
             int alpha = 255; // 0 is transparent
-            Color bgColor = Color.White;  // Default background color
+            SKColor bgColor = SKColors.White;  // Default background color
             char altDataDelim = ';';
 
             char[] paramDelimiter = { ',' };
@@ -304,11 +291,11 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
                           int hex = 0;
                          if (Int32.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out hex))
                          {
-                             bgColor = Color.FromArgb(hex);
+                             bgColor = ColorFromArgb(hex);
                          }
                          else
                          {
-                             bgColor = Color.FromName(value);
+                             bgColor = ParseColor(value);
                          }
                          break;
                     case "altdatadelim":
@@ -349,74 +336,42 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
                 }
             }
 
-            Bitmap bitmap = null;
-            Graphics graph = null;
             bool reuseable = false;
+            using SKBitmap bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Unpremul));
+            using (SKCanvas canvas = new SKCanvas(bitmap))
+            {
+                if (alpha == 256 && bgColor.Alpha != 255)
+                    alpha = bgColor.Alpha;
+                byte backgroundAlpha = alpha == 256 ? (byte)255 : (byte)alpha;
+                canvas.Clear(new SKColor(bgColor.Red, bgColor.Green, bgColor.Blue, backgroundAlpha));
+                SkiaDraw(data, canvas, altDataDelim, out reuseable);
+                canvas.Flush();
+            }
 
+            byte[] imageJ2000 = Array.Empty<byte>();
             try
             {
-                // XXX: In testing, it appears that if multiple threads dispose of separate GDI+ objects simultaneously,
-                // the native malloc heap can become corrupted, possibly due to a double free().  This may be due to
-                // bugs in the underlying libcairo used by mono's libgdiplus.dll on Linux/OSX.  These problems were
-                // seen with both libcario 1.10.2-6.1ubuntu3 and 1.8.10-2ubuntu1.  They go away if disposal is perfomed
-                // under lock.
-                lock (this)
-                {
-
-                    if (alpha == 256 && bgColor.A != 255)
-                        alpha = bgColor.A;
-
-                    if (alpha == 256)
+                ManagedImage managed = new ManagedImage(width, height,
+                    ManagedImage.ImageChannels.Color | ManagedImage.ImageChannels.Alpha);
+                for (int y = 0; y < height; y++)
+                    for (int x = 0; x < width; x++)
                     {
-                        bitmap = new Bitmap(width, height, PixelFormat.Format32bppRgb);
-                        graph = Graphics.FromImage(bitmap);
-                        graph.Clear(bgColor);
+                        SKColor c = bitmap.GetPixel(x, y);
+                        int i = y * width + x;
+                        managed.Red[i] = c.Red;
+                        managed.Green[i] = c.Green;
+                        managed.Blue[i] = c.Blue;
+                        managed.Alpha[i] = c.Alpha;
                     }
-                    else
-                    {
-                        Color newbg = Color.FromArgb(alpha, bgColor);
-                        bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-                        graph = Graphics.FromImage(bitmap);
-                        graph.Clear(newbg);
-                    }
-                    GDIDraw(data, graph, altDataDelim, out reuseable);
-                }
-
-                byte[] imageJ2000 = Array.Empty<byte>();
-
-                // This code exists for testing purposes, please do not remove.
-//                if (s_flipper)
-//                    imageJ2000 = s_asset1Data;
-//                else
-//                    imageJ2000 = s_asset2Data;
-//
-//                s_flipper = !s_flipper;
-
-                try
-                {
-                    imageJ2000 = OpenJPEG.EncodeFromImage(bitmap, lossless);
-                }
-                catch (Exception e)
-                {
-                    m_log.ErrorFormat(
-                        "[VECTORRENDERMODULE]: OpenJpeg Encode Failed.  Exception {0}{1}",
-                        e.Message, e.StackTrace);
-                }
-
-                return new OpenSim.Region.CoreModules.Scripting.DynamicTexture.DynamicTexture(
-                    data, extraParams, imageJ2000, new Size(width, height), reuseable);
+                imageJ2000 = OpenJPEG.Encode(managed, lossless);
             }
-            finally
+            catch (Exception e)
             {
-                lock (thisLock)
-                {
-                    if (graph != null)
-                        graph.Dispose();
-
-                    if (bitmap != null)
-                        bitmap.Dispose();
-                }
+                m_log.ErrorFormat("[VECTORRENDERMODULE]: OpenJPEG Encode Failed: {0}", e);
             }
+            return new OpenSim.Region.CoreModules.Scripting.DynamicTexture.DynamicTexture(
+                data, extraParams, imageJ2000, new Size(width, height), reuseable);
+
         }
 
         private int parseIntParam(string strInt)
@@ -436,43 +391,7 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
             return parsed;
         }
 
-/*
-        private void CairoDraw(string data, System.Drawing.Graphics graph)
-        {
-            using (Win32Surface draw = new Win32Surface(graph.GetHdc()))
-            {
-                Context contex = new Context(draw);
 
-                contex.Antialias = Antialias.None;    //fastest method but low quality
-                contex.LineWidth = 7;
-                char[] lineDelimiter = { ';' };
-                char[] partsDelimiter = { ',' };
-                string[] lines = data.Split(lineDelimiter);
-
-                foreach (string line in lines)
-                {
-                    string nextLine = line.Trim();
-
-                    if (nextLine.StartsWith("MoveTO"))
-                    {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, ref x, ref y);
-                        contex.MoveTo(x, y);
-                    }
-                    else if (nextLine.StartsWith("LineTo"))
-                    {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, ref x, ref y);
-                        contex.LineTo(x, y);
-                        contex.Stroke();
-                    }
-                }
-            }
-            graph.ReleaseHdc();
-        }
-*/
 
         /// <summary>
         /// Split input data into discrete command lines.
@@ -486,323 +405,328 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
             return data.Split(lineDelimiter);
         }
 
-        private void GDIDraw(string data, Graphics graph, char dataDelim, out bool reuseable)
+        private static SKColor ColorFromArgb(int argb)
+        {
+            uint u = unchecked((uint)argb);
+            return new SKColor((byte)(u >> 16), (byte)(u >> 8), (byte)u, (byte)(u >> 24));
+        }
+
+        private static SKColor ParseColor(string value)
+        {
+            value = value.Trim();
+        
+            string hex = value.StartsWith("#") ? value.Substring(1) : value;
+        
+            if (hex.Length == 8 &&
+                uint.TryParse(hex, NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out uint argb))
+            {
+                return new SKColor(
+                    (byte)(argb >> 16),
+                    (byte)(argb >> 8),
+                    (byte)argb,
+                    (byte)(argb >> 24));
+            }
+        
+            if (hex.Length == 6 &&
+                uint.TryParse(hex, NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture, out uint rgb))
+            {
+                return new SKColor(
+                    (byte)(rgb >> 16),
+                    (byte)(rgb >> 8),
+                    (byte)rgb,
+                    255);
+            }
+        
+            if (SKColor.TryParse(value, out SKColor parsed))
+                return parsed;
+        
+            return SKColors.Black;
+        }
+
+        private SKTypeface MakeTypeface(string fontName, bool bold, bool italic)
+        {
+            SKFontStyleWeight weight = bold
+                ? SKFontStyleWeight.Bold
+                : SKFontStyleWeight.Normal;
+        
+            SKFontStyleSlant slant = italic
+                ? SKFontStyleSlant.Italic
+                : SKFontStyleSlant.Upright;
+        
+            SKFontStyle style = new SKFontStyle(
+                weight,
+                SKFontStyleWidth.Normal,
+                slant);
+        
+            SKTypeface face = SKFontManager.Default.MatchFamily(fontName, style);
+        
+            if (face != null && !string.IsNullOrEmpty(face.FamilyName))
+                return face;
+        
+            face?.Dispose();
+        
+            if (!string.IsNullOrEmpty(m_fallbackFontFile))
+            {
+                try
+                {
+                    face = SKTypeface.FromFile(m_fallbackFontFile);
+        
+                    if (face != null && !string.IsNullOrEmpty(face.FamilyName))
+                        return face;
+        
+                    face?.Dispose();
+                }
+                catch (Exception e)
+                {
+                    m_log.WarnFormat(
+                        "[VECTOR SKIA]: Cannot load fallback font '{0}': {1}",
+                        m_fallbackFontFile, e.Message);
+                }
+            }
+        
+            face = SKTypeface.Default;
+        
+            if (face != null && !string.IsNullOrEmpty(face.FamilyName))
+                return face;
+        
+            throw new InvalidOperationException(
+                "SkiaSharp could not resolve a usable font. " +
+                "Configure [VectorRender] fallback_font_file.");
+        }
+
+        private static void DrawCap(SKCanvas canvas, SKPoint point, SKPoint toward,
+            string cap, SKPaint paint)
+        {
+            if (cap == "flat" || string.IsNullOrEmpty(cap)) return;
+            float dx = point.X - toward.X, dy = point.Y - toward.Y;
+            float length = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (length < 0.001f) return;
+            dx /= length; dy /= length;
+            float nx = -dy, ny = dx;
+            float r = Math.Max(3, paint.StrokeWidth * 1.5f);
+            using SKPaint fill = new SKPaint { Color = paint.Color, IsAntialias = true, Style = SKPaintStyle.Fill };
+            if (cap == "round")
+                canvas.DrawCircle(point, r, fill);
+            else if (cap == "arrow" || cap == "diamond")
+            {
+                using SKPath path = new SKPath();
+                path.MoveTo(point.X + dx * r * 2, point.Y + dy * r * 2);
+                path.LineTo(point.X + nx * r, point.Y + ny * r);
+                if (cap == "diamond") path.LineTo(point.X - dx * r * 2, point.Y - dy * r * 2);
+                path.LineTo(point.X - nx * r, point.Y - ny * r);
+                path.Close();
+                canvas.DrawPath(path, fill);
+            }
+        }
+
+        private void SkiaDraw(string data, SKCanvas canvas, char dataDelim, out bool reuseable)
         {
             reuseable = true;
             Point startPoint = new Point(0, 0);
             Point endPoint = new Point(0, 0);
-            Pen drawPen = null;
-            Font myFont = null;
-            SolidBrush myBrush = null;
-
+            SKColor color = SKColors.Black;
+            string fontName = m_fontName;
+            float fontSize = 14;
+            bool bold = false, italic = false, underline = false, strike = false;
+            string startCap = "flat", endCap = "flat";
+            using SKPaint stroke = new SKPaint { Color = color, StrokeWidth = 7, Style = SKPaintStyle.Stroke, IsAntialias = true };
+            using SKPaint fill = new SKPaint { Color = color, Style = SKPaintStyle.Fill, IsAntialias = true };
+            char[] delim = { ',' };
+            int baseSave = canvas.Save();
             try
             {
-                drawPen = new Pen(Color.Black, 7);
-                string fontName = m_fontName;
-                float fontSize = 14;
-                myFont = new Font(fontName, fontSize);
-                myBrush = new SolidBrush(Color.Black);
-
-                char[] partsDelimiter = {','};
-
                 foreach (string line in GetLines(data, dataDelim))
                 {
-                    string nextLine = line.TrimStart();
-
-//                    m_log.DebugFormat("[VECTOR RENDER MODULE]: Processing line '{0}'", nextLine);
-
-                    if (nextLine.StartsWith("Text") && nextLine.Length > 5)
+                    string cmd = line.TrimStart();
+                    if (cmd.StartsWith("Text") && cmd.Length > 5)
                     {
-                        int start = 4;
-                        if (nextLine[4] == ' ')
-                            start++;
-                        if (start < nextLine.Length)
+                        string value = cmd.Substring(cmd[4] == ' ' ? 5 : 4);
+/*
+                        using SKTypeface face = MakeTypeface(fontName, bold, italic);
+                        using SKFont font = new SKFont(face, fontSize);
+                        SKFontMetrics metrics = font.Metrics;
+                        float baseline = startPoint.Y - metrics.Ascent;
+                        canvas.DrawText(value, startPoint.X, baseline, font, fill);
+*/
+
+using SKTypeface face = MakeTypeface(fontName, bold, italic);
+using SKFont font = new SKFont(face, fontSize);
+
+SKFontMetrics metrics = font.Metrics;
+float baseline = startPoint.Y - metrics.Ascent;
+float width = font.MeasureText(value);
+
+m_log.WarnFormat(
+    "[VECTOR SKIA TEXT] font={0}, family={1}, size={2}, " +
+    "text='{3}', width={4}, ascent={5}, baseline={6}, color={7}",
+    fontName,
+    face.FamilyName,
+    fontSize,
+    value,
+    width,
+    metrics.Ascent,
+    baseline,
+    fill.Color
+);
+
+// Draw a marker at the text origin.
+using (SKPaint marker = new SKPaint
+{
+    Color = SKColors.Magenta,
+    Style = SKPaintStyle.Fill
+})
+{
+    canvas.DrawCircle(startPoint.X, baseline, 5, marker);
+}
+
+canvas.DrawText(value, startPoint.X, baseline, font, fill);
+
+                        float textWidth = font.MeasureText(value);
+                        if (underline || strike)
                         {
-                            nextLine = nextLine.Substring(start);
-                            graph.DrawString(nextLine, myFont, myBrush, startPoint);
+                            float thickness = Math.Max(1, fontSize / 14);
+                            using SKPaint decoration = new SKPaint { Color = color, StrokeWidth = thickness, IsAntialias = true };
+                            if (underline) canvas.DrawLine(startPoint.X, baseline + Math.Max(1, metrics.Descent * 0.5f), startPoint.X + textWidth, baseline + Math.Max(1, metrics.Descent * 0.5f), decoration);
+                            if (strike) canvas.DrawLine(startPoint.X, baseline + metrics.Ascent * 0.35f, startPoint.X + textWidth, baseline + metrics.Ascent * 0.35f, decoration);
                         }
                         continue;
                     }
-
-                    nextLine = nextLine.TrimEnd();
-                    if (nextLine.StartsWith("ResetTransf"))
+                    cmd = cmd.TrimEnd();
+                    if (cmd.StartsWith("ResetTransf"))
                     {
-                        graph.ResetTransform();
+                        canvas.RestoreToCount(baseSave);
+                        baseSave = canvas.Save();
                     }
-                    else if (nextLine.StartsWith("TransTransf"))
+                    else if (cmd.StartsWith("TransTransf"))
                     {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 11, ref x, ref y);
-                        graph.TranslateTransform(x, y);
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, 11, ref x, ref y);
+                        canvas.Translate(x, y);
                     }
-                    else if (nextLine.StartsWith("ScaleTransf"))
+                    else if (cmd.StartsWith("ScaleTransf"))
                     {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 11, ref x, ref y);
-                        graph.ScaleTransform(x, y);
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, 11, ref x, ref y);
+                        canvas.Scale(x, y);
                     }
-                    else if (nextLine.StartsWith("RotTransf"))
+                    else if (cmd.StartsWith("RotTransf"))
                     {
-                        float x = 0;
-                        GetParams(partsDelimiter, ref nextLine, 9, ref x);
-                        graph.RotateTransform(x);
+                        float angle = 0;
+                        GetParams(delim, ref cmd, 9, ref angle);
+                        canvas.RotateDegrees(angle);
                     }
-                    //replace with switch, or even better, do some proper parsing
-                    else if (nextLine.StartsWith("MoveTo"))
+                    else if (cmd.StartsWith("MoveTo"))
                     {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 6, ref x, ref y);
-                        startPoint.X = (int) x;
-                        startPoint.Y = (int) y;
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, 6, ref x, ref y);
+                        startPoint.X = (int)x; startPoint.Y = (int)y;
                     }
-                    else if (nextLine.StartsWith("LineTo"))
+                    else if (cmd.StartsWith("LineTo"))
                     {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 6, ref x, ref y);
-                        endPoint.X = (int) x;
-                        endPoint.Y = (int) y;
-                        graph.DrawLine(drawPen, startPoint, endPoint);
-                        startPoint.X = endPoint.X;
-                        startPoint.Y = endPoint.Y;
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, 6, ref x, ref y);
+                        endPoint.X = (int)x; endPoint.Y = (int)y;
+                        SKPoint a = new SKPoint(startPoint.X, startPoint.Y);
+                        SKPoint b = new SKPoint(endPoint.X, endPoint.Y);
+                        canvas.DrawLine(a, b, stroke);
+                        DrawCap(canvas, a, b, startCap, stroke);
+                        DrawCap(canvas, b, a, endCap, stroke);
+                        startPoint = endPoint;
                     }
-                    else if (nextLine.StartsWith("Image"))
+                    else if (cmd.StartsWith("Image"))
                     {
-                        // We cannot reuse any generated texture involving fetching an image via HTTP since that image
-                        // can change.
                         reuseable = false;
-
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 5, ref x, ref y);
-                        endPoint.X = (int) x;
-                        endPoint.Y = (int) y;
-
-                        using (Image image = ImageHttpRequest(nextLine))
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, 5, ref x, ref y);
+                        endPoint.X = (int)x; endPoint.Y = (int)y;
+                        using SKBitmap image = ImageHttpRequest(cmd);
+                        if (image != null)
                         {
-                            if (image != null)
-                            {
-                                graph.DrawImage(image, (float)startPoint.X, (float)startPoint.Y, x, y);
-                            }
-                            else
-                            {
-                                using (Font errorFont = new Font(m_fontName,6))
-                                {
-                                    graph.DrawString("URL couldn't be resolved or is", errorFont,
-                                                     myBrush, startPoint);
-                                    graph.DrawString("not an image. Please check URL.", errorFont,
-                                                     myBrush, new Point(startPoint.X, 12 + startPoint.Y));
-                                }
-
-                                graph.DrawRectangle(drawPen, startPoint.X, startPoint.Y, endPoint.X, endPoint.Y);
-                            }
-                        }
-
-                        startPoint.X += endPoint.X;
-                        startPoint.Y += endPoint.Y;
-                    }
-                    else if (nextLine.StartsWith("Rectangle"))
-                    {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 9, ref x, ref y);
-                        endPoint.X = (int) x;
-                        endPoint.Y = (int) y;
-                        graph.DrawRectangle(drawPen, startPoint.X, startPoint.Y, endPoint.X, endPoint.Y);
-                        startPoint.X += endPoint.X;
-                        startPoint.Y += endPoint.Y;
-                    }
-                    else if (nextLine.StartsWith("FillRectangle"))
-                    {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 13, ref x, ref y);
-                        endPoint.X = (int) x;
-                        endPoint.Y = (int) y;
-                        graph.FillRectangle(myBrush, startPoint.X, startPoint.Y, endPoint.X, endPoint.Y);
-                        startPoint.X += endPoint.X;
-                        startPoint.Y += endPoint.Y;
-                    }
-                    else if (nextLine.StartsWith("FillPolygon"))
-                    {
-                        PointF[] points = null;
-                        GetParams(partsDelimiter, ref nextLine, 11, ref points);
-                        graph.FillPolygon(myBrush, points);
-                    }
-                    else if (nextLine.StartsWith("Polygon"))
-                    {
-                        PointF[] points = null;
-                        GetParams(partsDelimiter, ref nextLine, 7, ref points);
-                        graph.DrawPolygon(drawPen, points);
-                    }
-                    else if (nextLine.StartsWith("Ellipse"))
-                    {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 7, ref x, ref y);
-                        endPoint.X = (int)x;
-                        endPoint.Y = (int)y;
-                        graph.DrawEllipse(drawPen, startPoint.X, startPoint.Y, endPoint.X, endPoint.Y);
-                        startPoint.X += endPoint.X;
-                        startPoint.Y += endPoint.Y;
-                    }
-                    else if (nextLine.StartsWith("FillEllipse"))
-                    {
-                        float x = 0;
-                        float y = 0;
-                        GetParams(partsDelimiter, ref nextLine, 11, ref x, ref y);
-                        endPoint.X = (int)x;
-                        endPoint.Y = (int)y;
-                        graph.FillEllipse(myBrush, startPoint.X, startPoint.Y, endPoint.X, endPoint.Y);
-                        startPoint.X += endPoint.X;
-                        startPoint.Y += endPoint.Y;
-                    }
-                    else if (nextLine.StartsWith("FontSize"))
-                    {
-                        nextLine = nextLine.Remove(0, 8);
-                        nextLine = nextLine.Trim();
-                        fontSize = Convert.ToSingle(nextLine, CultureInfo.InvariantCulture);
-
-                        myFont.Dispose();
-                        myFont = new Font(fontName, fontSize);
-                    }
-                    else if (nextLine.StartsWith("FontProp"))
-                    {
-                        FontStyle myFontStyle = myFont.Style;
-
-                        nextLine = nextLine.Remove(0, 8);
-                        nextLine = nextLine.Trim();
-
-                        string[] fprops = nextLine.Split(partsDelimiter);
-                        foreach (string prop in fprops)
-                        {
-                            switch (prop)
-                            {
-                                case "B":
-                                    myFontStyle |= FontStyle.Bold;
-                                    break;
-                                case "I":
-                                    myFontStyle |= FontStyle.Italic;
-                                    break;
-                                case "U":
-                                    myFontStyle |= FontStyle.Underline;
-                                    break;
-                                case "S":
-                                    myFontStyle |= FontStyle.Strikeout;
-                                    break;
-                                case "R":   //This special case resets all font properties
-                                    myFontStyle = FontStyle.Regular;
-                                    break;
-                            }
-                        }
-                        if (myFontStyle != myFont.Style)
-                        {
-                            Font newFont = new Font(myFont, myFontStyle);
-                            myFont.Dispose();
-                            myFont = newFont;
-                        }
-                    }
-                    else if (nextLine.StartsWith("FontName"))
-                    {
-                        nextLine = nextLine.Remove(0, 8);
-                        fontName = nextLine.Trim();
-                        myFont.Dispose();
-                        myFont = new Font(fontName, fontSize);
-                    }
-                    else if (nextLine.StartsWith("PenSize"))
-                    {
-                        nextLine = nextLine.Remove(0, 7);
-                        nextLine = nextLine.Trim();
-                        float size = Convert.ToSingle(nextLine, CultureInfo.InvariantCulture);
-                        drawPen.Width = size;
-                    }
-                    else if (nextLine.StartsWith("PenCap"))
-                    {
-                        bool start = true, end = true;
-                        nextLine = nextLine.Remove(0, 6);
-                        nextLine = nextLine.Trim();
-                        string[] cap = nextLine.Split(partsDelimiter);
-                        if (cap[0].ToLower() == "start")
-                            end = false;
-                        else if (cap[0].ToLower() == "end")
-                            start = false;
-                        else if (cap[0].ToLower() != "both")
-                            return;
-                        string type = cap[1].ToLower();
-
-                        if (end)
-                        {
-                            switch (type)
-                            {
-                                case "arrow":
-                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
-                                    break;
-                                case "round":
-                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.RoundAnchor;
-                                    break;
-                                case "diamond":
-                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.DiamondAnchor;
-                                    break;
-                                case "flat":
-                                    drawPen.EndCap = System.Drawing.Drawing2D.LineCap.Flat;
-                                    break;
-                            }
-                        }
-                        if (start)
-                        {
-                            switch (type)
-                            {
-                                case "arrow":
-                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
-                                    break;
-                                case "round":
-                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.RoundAnchor;
-                                    break;
-                                case "diamond":
-                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.DiamondAnchor;
-                                    break;
-                                case "flat":
-                                    drawPen.StartCap = System.Drawing.Drawing2D.LineCap.Flat;
-                                    break;
-                            }
-                        }
-                    }
-                    else if (nextLine.StartsWith("PenColour") || nextLine.StartsWith("PenColor"))
-                    {
-                        nextLine = nextLine.Remove(0, 9);
-                        nextLine = nextLine.Trim();
-                        int hex = 0;
-
-                        Color newColor;
-                        if (Int32.TryParse(nextLine, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out hex))
-                        {
-                            newColor = Color.FromArgb(hex);
+                            canvas.DrawBitmap(image, new SKRect(startPoint.X, startPoint.Y, startPoint.X + x, startPoint.Y + y));
                         }
                         else
                         {
-                            // this doesn't fail, it just returns black if nothing is found
-                            newColor = Color.FromName(nextLine);
+                            using SKTypeface face = MakeTypeface(m_fontName, false, false);
+                            using SKFont font = new SKFont(face, 6);
+                            canvas.DrawText("URL couldn't be resolved or is", startPoint.X, startPoint.Y + 7, font, fill);
+                            canvas.DrawText("not an image. Please check URL.", startPoint.X, startPoint.Y + 19, font, fill);
+                            canvas.DrawRect(startPoint.X, startPoint.Y, endPoint.X, endPoint.Y, stroke);
                         }
-
-                        myBrush.Color = newColor;
-                        drawPen.Color = newColor;
+                        startPoint.X += endPoint.X; startPoint.Y += endPoint.Y;
+                    }
+                    else if (cmd.StartsWith("Rectangle") || cmd.StartsWith("FillRectangle"))
+                    {
+                        bool filled = cmd.StartsWith("FillRectangle");
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, filled ? 13 : 9, ref x, ref y);
+                        endPoint.X = (int)x; endPoint.Y = (int)y;
+                        canvas.DrawRect(startPoint.X, startPoint.Y, endPoint.X, endPoint.Y, filled ? fill : stroke);
+                        startPoint.X += endPoint.X; startPoint.Y += endPoint.Y;
+                    }
+                    else if (cmd.StartsWith("FillPolygon") || cmd.StartsWith("Polygon"))
+                    {
+                        bool filled = cmd.StartsWith("FillPolygon");
+                        PointF[] points = null;
+                        GetParams(delim, ref cmd, filled ? 11 : 7, ref points);
+                        if (points != null && points.Length > 1)
+                        {
+                            using SKPath path = new SKPath();
+                            path.MoveTo(points[0].X, points[0].Y);
+                            for (int i = 1; i < points.Length; i++) path.LineTo(points[i].X, points[i].Y);
+                            path.Close();
+                            canvas.DrawPath(path, filled ? fill : stroke);
+                        }
+                    }
+                    else if (cmd.StartsWith("Ellipse") || cmd.StartsWith("FillEllipse"))
+                    {
+                        bool filled = cmd.StartsWith("FillEllipse");
+                        float x = 0, y = 0;
+                        GetParams(delim, ref cmd, filled ? 11 : 7, ref x, ref y);
+                        endPoint.X = (int)x; endPoint.Y = (int)y;
+                        canvas.DrawOval(new SKRect(startPoint.X, startPoint.Y, startPoint.X + endPoint.X, startPoint.Y + endPoint.Y), filled ? fill : stroke);
+                        startPoint.X += endPoint.X; startPoint.Y += endPoint.Y;
+                    }
+                    else if (cmd.StartsWith("FontSize"))
+                        fontSize = Convert.ToSingle(cmd.Substring(8).Trim(), CultureInfo.InvariantCulture);
+                    else if (cmd.StartsWith("FontProp"))
+                    {
+                        foreach (string prop in cmd.Substring(8).Trim().Split(delim))
+                        {
+                            switch (prop.Trim())
+                            {
+                                case "B": bold = true; break;
+                                case "I": italic = true; break;
+                                case "U": underline = true; break;
+                                case "S": strike = true; break;
+                                case "R": bold = italic = underline = strike = false; break;
+                            }
+                        }
+                    }
+                    else if (cmd.StartsWith("FontName"))
+                        fontName = cmd.Substring(8).Trim();
+                    else if (cmd.StartsWith("PenSize"))
+                        stroke.StrokeWidth = Convert.ToSingle(cmd.Substring(7).Trim(), CultureInfo.InvariantCulture);
+                    else if (cmd.StartsWith("PenCap"))
+                    {
+                        string[] parts = cmd.Substring(6).Trim().Split(delim);
+                        if (parts.Length >= 2)
+                        {
+                            string where = parts[0].Trim().ToLowerInvariant();
+                            string cap = parts[1].Trim().ToLowerInvariant();
+                            if (where == "start" || where == "both") startCap = cap;
+                            if (where == "end" || where == "both") endCap = cap;
+                        }
+                    }
+                    else if (cmd.StartsWith("PenColour") || cmd.StartsWith("PenColor"))
+                    {
+                        color = ParseColor(cmd.Substring(9).Trim());
+                        stroke.Color = color; fill.Color = color;
                     }
                 }
             }
-            finally
-            {
-                if (drawPen != null)
-                    drawPen.Dispose();
-
-                if (myFont != null)
-                    myFont.Dispose();
-
-                if (myBrush != null)
-                    myBrush.Dispose();
-            }
+            finally { canvas.RestoreToCount(baseSave); }
         }
 
         private static void GetParams(char[] partsDelimiter, ref string line, int startLength, ref float x)
@@ -864,7 +788,7 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
             }
         }
 
-        private Bitmap ImageHttpRequest(string url)
+        private SKBitmap ImageHttpRequest(string url)
         {
             try
             {
@@ -876,7 +800,7 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
                     {
                         using (Stream s = response.GetResponseStream())
                         {
-                            Bitmap image = new Bitmap(s);
+                            SKBitmap image = SKBitmap.Decode(s);
                             return image;
                         }
                     }
@@ -888,3 +812,4 @@ namespace OpenSim.Region.CoreModules.Scripting.VectorRender
         }
     }
 }
+

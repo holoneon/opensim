@@ -16703,20 +16703,20 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
 					
 					    // Translate the renderer's detail level into the
 					    // resolution expected by our managed SculptMap.
-					    int lod = m_sculptLodInCastRay switch
-					    {
-					        DetailLevel.Lowest => 6,
-					        DetailLevel.Low => 8,
-					        DetailLevel.Medium => 16,
-					        DetailLevel.High => 32,
-					        DetailLevel.Highest => 64,
-					        _ => 16
-					    };
-					
+				
+                                            int sculptResolution = m_sculptLodInCastRay switch
+                                            {
+                                                DetailLevel.Low => 8,
+                                                DetailLevel.Medium => 16,
+                                                DetailLevel.High => 32,
+                                                DetailLevel.Highest => 64,
+                                                _ => 16
+                                            };
+	
 					    SculptMesh sculpt = new SculptMesh(
 					        sculptImage,
 					        sculptType,
-					        lod,
+					        sculptResolution,
 					        mirror,
 					        invert);
 					
@@ -17058,7 +17058,7 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
         {
             if (mesh != null)
             {
-                foreach (Face face in mesh.Faces)
+                foreach (OpenMetaverse.Rendering.Face face in mesh.Faces)
                 {
                     for (int i = 0; i < face.Indices.Count; i += 3)
                     {
