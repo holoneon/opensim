@@ -1737,6 +1737,11 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                 ((LLClientView)client).DisableFacelights = m_disableFacelights;
 
                 client.Start();
+
+                if (client.SceneAgent is null)
+                {
+                    client = null;
+                }
             }
 
             return client;

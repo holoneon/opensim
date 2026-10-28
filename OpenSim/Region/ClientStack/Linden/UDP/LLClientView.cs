@@ -773,10 +773,40 @@ namespace OpenSim.Region.ClientStack.LindenUDP
 
         public virtual void Start()
         {
-            m_asyncPacketProcess.Start();
-            m_scene.AddNewAgent(this, PresenceType.User);
-
-            //RefreshGroupMembership();
+             if (m_scene.AddNewAgent(this, PresenceType.User) is null)
+             {
+                 m_log.WarnFormat(
+                     "[LLCLIENTVIEW]: Scene admission failed for {0} ({1}), circuit {2} in {3}",
+                     Name, AgentId, CircuitCode, m_scene.RegionInfo.RegionName);
+ 
+                 // This client was never admitted. Do not call Close(), since it
+                 // removes a scene presence by agent UUID and might close a newer client.
+                 CleanupRejectedConnection();
+             }
+        }
+ 
+        private void CleanupRejectedConnection()
+        {
+            lock (CloseSyncLock)
+            {
+                if (!IsActive)
+                    return;
+ 
+                IsActive = false;
+                m_asyncPacketProcess.Stop();
+ 
+                m_udpClient.OnQueueEmpty -= HandleQueueEmpty;
+                m_udpClient.HasUpdates -= HandleHasUpdates;
+                m_udpClient.OnPacketStats -= PopulateStats;
+                m_udpClient.Shutdown();
+ 
+                ImageManager?.Close();
+                ImageManager = null;
+                m_entityUpdates.Close();
+                m_entityProps.Close();
+                m_killRecord.Clear();
+                GroupsInView.Clear();
+            }
         }
 
         # endregion

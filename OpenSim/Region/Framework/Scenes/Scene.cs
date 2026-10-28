@@ -3139,6 +3139,19 @@ namespace OpenSim.Region.Framework.Scenes
             // In practice, the lock (this) in LLUDPServer.AddNewClient() currently lock across all
             // AddNewClient() operations (though not other ops).
             // In the future this can be relieved once locking per agent (not necessarily on AgentCircuitData) is improved.
+
+            if (aCircuit is null)
+            {
+                m_log.WarnFormat(
+                    "[SCENE]: AddNewAgent rejected for agent {0}, circuit {1}, region {2}: circuit missing",
+                    client.AgentId,
+                    client.CircuitCode,
+                    RegionInfo.RegionName);
+            
+                StatsReporter.UpdateUsersLoggingIn(false);
+                return null;
+            }
+
             lock (aCircuit)
             {
                 vialogin = (aCircuit.teleportFlags & (uint)(Constants.TeleportFlags.ViaHGLogin | Constants.TeleportFlags.ViaLogin)) != 0;
