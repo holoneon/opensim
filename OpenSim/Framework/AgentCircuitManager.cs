@@ -109,36 +109,58 @@ namespace OpenSim.Framework
             }
         }
 
-        public virtual void RemoveCircuit(uint circuitCode)
-        {
-            lock (m_lock)
-            {
-                if (m_agentCircuits.Remove(circuitCode, out AgentCircuitData ac))
-                    m_agentCircuitsByUUID.Remove(ac.AgentID);
-            }
-        }
-
-        public virtual void RemoveCircuit(UUID agentID)
-        {
-            lock (m_lock)
-            {
-                if (m_agentCircuitsByUUID.Remove(agentID, out AgentCircuitData ac))
-                    m_agentCircuits.Remove(ac.circuitcode);
-            }
-        }
-
-        public virtual void RemoveCircuit(AgentCircuitData ac)
-        {
-            lock (m_lock)
-            {
-                if (m_agentCircuitsByUUID.Remove(ac.AgentID, out AgentCircuitData byuuid))
-                {
-                    if (byuuid.circuitcode != ac.circuitcode)
-                        m_agentCircuits.Remove(byuuid.circuitcode);
-                }
-                m_agentCircuits.Remove(ac.circuitcode);
-            }
-        }
+	public virtual void RemoveCircuit(uint circuitCode)
+	{
+	    lock (m_lock)
+	    {
+	        if (m_agentCircuits.Remove(circuitCode, out AgentCircuitData ac))
+	        {
+	            if (m_agentCircuitsByUUID.TryGetValue(ac.AgentID, out AgentCircuitData current)
+	                && ReferenceEquals(current, ac))
+	            {
+	                m_agentCircuitsByUUID.Remove(ac.AgentID);
+	            }
+	        }
+	    }
+	}
+	
+	public virtual void RemoveCircuit(UUID agentID)
+	{
+	    lock (m_lock)
+	    {
+	        if (m_agentCircuitsByUUID.Remove(agentID, out AgentCircuitData ac))
+	        {
+	            if (m_agentCircuits.TryGetValue(ac.circuitcode, out AgentCircuitData current)
+	                && ReferenceEquals(current, ac))
+	            {
+	                m_agentCircuits.Remove(ac.circuitcode);
+	            }
+	        }
+	    }
+	}
+	
+	public virtual void RemoveCircuit(AgentCircuitData ac)
+	{
+	    if (ac is null)
+	        return;
+	
+	    lock (m_lock)
+	    {
+	        // Remove the circuit only if it is still the same registration.
+	        if (m_agentCircuits.TryGetValue(ac.circuitcode, out AgentCircuitData current)
+	            && ReferenceEquals(current, ac))
+	        {
+	            m_agentCircuits.Remove(ac.circuitcode);
+	        }
+	
+	        // Never remove a newer registration for the same avatar.
+	        if (m_agentCircuitsByUUID.TryGetValue(ac.AgentID, out AgentCircuitData byuuid)
+	            && ReferenceEquals(byuuid, ac))
+	        {
+	            m_agentCircuitsByUUID.Remove(ac.AgentID);
+	        }
+	    }
+	}
 
         public AgentCircuitData GetAgentCircuitData(uint circuitCode)
         {
