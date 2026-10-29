@@ -773,6 +773,9 @@ namespace OpenSim.Region.ClientStack.LindenUDP
 
         public virtual void Start()
         {
+
+             m_asyncPacketProcess.Start();
+
              if (m_scene.AddNewAgent(this, PresenceType.User) is null)
              {
                  m_log.WarnFormat(
@@ -9169,14 +9172,23 @@ namespace OpenSim.Region.ClientStack.LindenUDP
             c.OnSetAlwaysRun?.Invoke(c, run.AgentData.AlwaysRun);
         }
 
-        private static void HandleCompleteAgentMovement(LLClientView c, Packet Pack)
-        {
-            //m_log.DebugFormat("[LLClientView] HandleCompleteAgentMovement");
-
-            CompleteAgentMovementPacket cmp = (CompleteAgentMovementPacket)Pack;
-            if(cmp.AgentData.CircuitCode == c.m_circuitCode)
-                c.OnCompleteMovementToRegion?.Invoke(c, true);
-        }
+	private static void HandleCompleteAgentMovement(LLClientView c, Packet Pack)
+	{
+	    CompleteAgentMovementPacket cmp = (CompleteAgentMovementPacket)Pack;
+	
+/*
+	    m_log.WarnFormat(
+	        "[LOGIN DEBUG]: CompleteAgentMovement agent={0}, packetCircuit={1}, clientCircuit={2}, match={3}, subscribed={4}",
+	        c.AgentId,
+	        cmp.AgentData.CircuitCode,
+	        c.m_circuitCode,
+	        cmp.AgentData.CircuitCode == c.m_circuitCode,
+	        c.OnCompleteMovementToRegion is not null);
+*/
+	
+	    if (cmp.AgentData.CircuitCode == c.m_circuitCode)
+	        c.OnCompleteMovementToRegion?.Invoke(c, true);
+	}
 
         private static void HandleAgentAnimation(LLClientView c, Packet Pack)
         {

@@ -1563,6 +1563,14 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                 if (IsClientAuthorized(uccp, out AuthenticateResponse sessionInfo))
                 {
                     AgentCircuitData aCircuit = m_circuitManager.GetAgentCircuitData(uccp.CircuitCode.Code);
+                    if (aCircuit is null)
+                    {
+                        m_log.WarnFormat("[LLUDPSERVER]: Rejecting UseCircuitCode for agent {0}, circuit {1}, endpoint {2}: circuit missing before AddClient", uccp.CircuitCode.ID, uccp.CircuitCode.Code, endPoint);
+                        lock (m_pendingCache)
+                            m_pendingCache.Remove(endPoint);
+                        return;
+                    }
+
                     if(!string.IsNullOrEmpty(aCircuit.IPAddress))
                     {
                         try
@@ -1587,16 +1595,6 @@ namespace OpenSim.Region.ClientStack.LindenUDP
 
                     if (client == null)
                     {
-                        lock (m_pendingCache)
-                            m_pendingCache.Remove(endPoint);
-                        return;
-                    }
-
-                    // This will be true if the client is new, e.g. not
-                    // an existing child agent, and there is no circuit data
-                    if (aCircuit == null)
-                    {
-                        Scene.CloseAgent(client.AgentId, true);
                         lock (m_pendingCache)
                             m_pendingCache.Remove(endPoint);
                         return;
@@ -1726,7 +1724,9 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                             client.RemoteEndPoint == remoteEndPoint &&
                             client.SceneAgent.ControllingClient.SecureSessionId.Equals(sessionInfo.LoginInfo.SecureSession))
                         return client;
+                    m_log.WarnFormat("[CIRCUIT DEBUG]: Closing existing client {0}, old circuit={1}, incoming circuit={2}", agentID, client.CircuitCode, circuitCode);
                     Scene.CloseAgent(agentID, true);
+                    m_log.WarnFormat("[CIRCUIT DEBUG]: After CloseAgent, incoming circuit {0} exists={1}", circuitCode, m_circuitManager.GetAgentCircuitData(circuitCode) is not null);
                 }
 
                 LLUDPClient udpClient = new(this, ThrottleRates, Throttle, circuitCode, agentID, remoteEndPoint, m_defaultRTO, m_maxRTO);
@@ -1964,3 +1964,4 @@ namespace OpenSim.Region.ClientStack.LindenUDP
         }
     }
 }
+
