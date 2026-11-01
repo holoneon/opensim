@@ -362,6 +362,8 @@ namespace OpenSim.Services.FSAssetService
             return ret;
         }
 
+        private readonly Dictionary<string, DateTime> m_MissingPayloadSince =
+            new Dictionary<string, DateTime>();
         protected IAssetLoader m_AssetLoader = null;
         protected IFSAssetDataPlugin m_DataConnector = null;
         protected IAssetService m_FallbackService;
@@ -977,11 +979,45 @@ namespace OpenSim.Services.FSAssetService
                         string assetId = Path.GetFileNameWithoutExtension(metaPath);
                         string assetPath = Path.Combine(spoolSubDir, assetId + ".asset");
 
-                        if (!File.Exists(assetPath))
-                        {
-                            m_log.WarnFormat("[FSASSETS]: Metadata exists without asset payload yet: {0}", metaPath);
-                            continue;
-                        }
+
+			if (!File.Exists(assetPath))
+			{
+			    DateTime now = DateTime.UtcNow;
+			
+			    if (!m_MissingPayloadSince.TryGetValue(metaPath, out DateTime firstSeen))
+			    {
+			        m_MissingPayloadSince[metaPath] = now;
+			
+			        m_log.WarnFormat(
+			            "[FSASSETS]: Missing payload for {0}; metadata will be deleted "
+			            + "if still missing after 15 minutes",
+			            metaPath);
+			
+			        continue;
+			    }
+			
+			    if (now - firstSeen >= TimeSpan.FromMinutes(15))
+			    {
+			        // Recheck immediately before deleting.
+			        if (!File.Exists(assetPath))
+			        {
+			            File.Delete(metaPath);
+			
+			            m_log.WarnFormat(
+			                "[FSASSETS]: Deleted metadata after payload was missing "
+			                + "for 15 minutes: {0}",
+			                metaPath);
+			        }
+			
+			        m_MissingPayloadSince.Remove(metaPath);
+			    }
+			
+			    continue;
+			}
+			
+			// Payload appeared: reset any previous missing-payload timer.
+			m_MissingPayloadSince.Remove(metaPath);
+
 
                         byte[] data = File.ReadAllBytes(assetPath);
                         OSD osd = OSDParser.DeserializeJson(File.ReadAllText(metaPath));
