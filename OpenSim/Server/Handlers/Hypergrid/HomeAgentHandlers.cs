@@ -90,9 +90,10 @@ namespace OpenSim.Server.Handlers.Hypergrid
                 m_log.ErrorFormat("[HOME AGENT HANDLER]: Bad cast in UnpackData");
             }
 
-            // Verify if this call came from the login server
-            if (remoteAddress == m_LoginServerIP)
-                data.fromLogin = true;
+
+            // Public HTTP requests cannot bootstrap a login session.
+            // Initial login must call the local UserAgentService directly.
+            data.fromLogin = false;
 
         }
 
@@ -134,3 +135,4 @@ namespace OpenSim.Server.Handlers.Hypergrid
     }
 
 }
+
