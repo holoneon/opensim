@@ -70,6 +70,8 @@ namespace OpenSim.Region.CoreModules.Scripting.HttpRequest
         private static HttpClient VeriFyCertClient = null;
         private static HttpClient VeriFyNoCertClient = null;
 
+        private Scene m_scene; // log region etc
+
         private static readonly object m_mainLock = new();
         private static int m_numberScenes;
 
@@ -226,6 +228,8 @@ namespace OpenSim.Region.CoreModules.Scripting.HttpRequest
 
         public void AddRegion(Scene scene)
         {
+
+            m_scene = scene;
             scene.RegisterModuleInterface<IHttpRequestModule>(this);
             Interlocked.Increment(ref m_numberScenes);
         }
@@ -425,6 +429,13 @@ namespace OpenSim.Region.CoreModules.Scripting.HttpRequest
                 }
             }
 
+            SceneObjectPart part = m_scene?.GetSceneObjectPart(localID);
+
+            htc.JobName =
+                $"region=\"{m_scene?.RegionInfo.RegionName}\" " +
+                $"object=\"{part?.Name}\" objectID={part?.UUID} " +
+                $"position={part?.AbsolutePosition} scriptItemID={itemID}";
+
             htc.RequestModule = this;
             htc.LocalID = localID;
             htc.ItemID = itemID;
@@ -584,10 +595,11 @@ namespace OpenSim.Region.CoreModules.Scripting.HttpRequest
         public Dictionary<string, string> Headers;
         public int Status;
         public string Url;
+        public string JobName;
 
         public void Process()
         {
-            HttpRequestModule.m_jobEngine?.QueueJob("", SendRequest);
+            HttpRequestModule.m_jobEngine?.QueueJob(JobName, SendRequest);
         }
 
         public void SendRequest()

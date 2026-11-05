@@ -247,7 +247,7 @@ namespace OpenSim.Region.CoreModules.Framework.UserManagement
         {
             //EventManager.TriggerAvatarPickerRequest();
 
-            m_log.DebugFormat("[USER MANAGEMENT MODULE]: HandleAvatarPickerRequest for {0}", query);
+            //m_log.DebugFormat("[USER MANAGEMENT MODULE]: HandleAvatarPickerRequest for {0}", query);
             List<UserData> users = GetUserData(query, 500, 1);
             client.SendAvatarPickerReply(RequestID, users);
         }
@@ -723,9 +723,11 @@ userdata.DisplayName = string.IsNullOrWhiteSpace(uac.DisplayName)
     ? string.Empty
     : uac.DisplayName.Trim();
 
+/*
 m_log.WarnFormat(
     "[USER MANAGEMENT MODULE]: UserData DisplayName='{0}' for {1} {2}",
     userdata.DisplayName, userdata.FirstName, userdata.LastName);
+*/
 
                         m_userCacheByID.Add(id, userdata, 1800000);
 
