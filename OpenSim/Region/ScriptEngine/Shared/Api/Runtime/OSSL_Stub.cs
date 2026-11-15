@@ -392,6 +392,12 @@ namespace OpenSim.Region.ScriptEngine.Shared.ScriptBase
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public LSL_String osGetLoginNonce(string service, string action)
+        {
+            return m_OSSL_Functions.osGetLoginNonce(service, action);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void osMessageAttachments(LSL_Key avatar, string message, LSL_List attachmentPoints, int flags)
         {
             m_OSSL_Functions.osMessageAttachments(avatar, message, attachmentPoints, flags);

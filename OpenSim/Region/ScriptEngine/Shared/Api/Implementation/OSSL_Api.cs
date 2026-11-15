@@ -6613,7 +6613,36 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
 
         public LSL_String osGetNonce(string service, string action)
         {
-            if (string.IsNullOrWhiteSpace(service) || string.IsNullOrWhiteSpace(action))
+            return IssueHoloNonce(service, action, UUID.Zero);
+        }
+        
+        public LSL_String osGetLoginNonce(string service, string action)
+        {
+            DetectParams detected = m_ScriptEngine.GetDetectParams(m_item.ItemID, 0);
+        
+            if (detected == null || detected.Key == UUID.Zero)
+            {
+                OSSLShoutError("osGetLoginNonce: No detected avatar.");
+                return LSL_String.Empty;
+            }
+        
+            // Ensure the detected entity is an avatar in this region.
+            ScenePresence presence = World.GetScenePresence(detected.Key);
+        
+            if (presence == null || presence.IsChildAgent)
+            {
+                OSSLShoutError("osGetLoginNonce: Detected avatar is not present.");
+                return LSL_String.Empty;
+            }
+        
+            return IssueHoloNonce(service, action, detected.Key);
+        }
+        
+        private LSL_String IssueHoloNonce(
+            string service, string action, UUID avatarID)
+        {
+            if (string.IsNullOrWhiteSpace(service) ||
+                string.IsNullOrWhiteSpace(action))
                 return LSL_String.Empty;
         
             service = service.Trim();
@@ -6627,24 +6656,19 @@ namespace OpenSim.Region.ScriptEngine.Shared.Api
         
             try
             {
-                UUID ownerID = m_item.OwnerID;
-                UUID objectID = m_host.UUID;
-                string objectName = m_host.Name ?? "";
-        
-                UUID regionID = World.RegionInfo.RegionID;
-                string regionName = World.RegionInfo.RegionName ?? "";
-        
                 long createdAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         
                 string json =
                     "{"
                     + "\"service\":\"" + EscapeJson(service) + "\","
                     + "\"action\":\"" + EscapeJson(action) + "\","
-                    + "\"owner_uuid\":\"" + ownerID + "\","
-                    + "\"object_uuid\":\"" + objectID + "\","
-                    + "\"object_name\":\"" + EscapeJson(objectName) + "\","
-                    + "\"region_uuid\":\"" + regionID + "\","
-                    + "\"region_name\":\"" + EscapeJson(regionName) + "\","
+                    + "\"owner_uuid\":\"" + m_item.OwnerID + "\","
+                    + "\"avatar_uuid\":\"" + avatarID + "\","
+                    + "\"object_uuid\":\"" + m_host.UUID + "\","
+                    + "\"object_name\":\"" + EscapeJson(m_host.Name ?? "") + "\","
+                    + "\"region_uuid\":\"" + World.RegionInfo.RegionID + "\","
+                    + "\"region_name\":\""
+                        + EscapeJson(World.RegionInfo.RegionName ?? "") + "\","
                     + "\"created_at\":" + createdAt
                     + "}";
         
