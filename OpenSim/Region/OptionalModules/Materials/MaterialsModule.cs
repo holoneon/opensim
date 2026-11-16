@@ -1032,8 +1032,7 @@ namespace OpenSim.Region.OptionalModules.Materials
                 return false;
 
             int indx = 0;
-            while (entries[indx].te_index != side && indx < entries.Length)
-                indx++;
+            while (entries[indx].te_index != side && ++indx < entries.Length);
 
             if (indx >= entries.Length)
                 return false;

@@ -101,7 +101,7 @@ namespace OpenSim.Framework
         {
             // Parse blacklist
             string[] configBlacklistEntries
-                = fullConfigEntry.Split(new char[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+		 = fullConfigEntry.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.RemoveEmptyEntries);
 
             configBlacklistEntries = configBlacklistEntries.Select(e => e.Trim()).ToArray();
 
@@ -110,18 +110,15 @@ namespace OpenSim.Framework
 
             foreach (string configEntry in configBlacklistEntries)
             {
-                if (configEntry.Contains("/"))
+                if (configEntry.Contains('/'))
                 {
-                    IPNetwork network;
-
-                    if (!IPNetwork.TryParse(configEntry, out network))
+                    if (!IPNetwork.TryParse(configEntry, out IPNetwork network))
                     {
                         m_log.ErrorFormat(
                             "[OUTBOUND URL FILTER]: Entry [{0}] is invalid network for {1}", configEntry, filterName);
 
                         continue;
                     }
-
                     networks.Add(network);
                 }
                 else

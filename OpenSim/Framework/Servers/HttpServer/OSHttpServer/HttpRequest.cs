@@ -375,8 +375,8 @@ namespace OSHttpServer
                             continue;
                         if(s.StartsWith("for", StringComparison.InvariantCultureIgnoreCase))
                         {
-                            int indx = s.IndexOf("=", 3);
-                            if(indx < 0 || indx >= s.Length - 1)
+                            int indx = s.IndexOf('=', 3);
+                            if(indx < 0 || indx >= s.Length - 8)
                                 continue;
                             s = s[indx..];
                             addr = s.Trim();

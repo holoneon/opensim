@@ -1563,9 +1563,11 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                 if (IsClientAuthorized(uccp, out AuthenticateResponse sessionInfo))
                 {
                     AgentCircuitData aCircuit = m_circuitManager.GetAgentCircuitData(uccp.CircuitCode.Code);
-                    if (aCircuit is null)
+
+                    // This will be true if the client is new, e.g. not
+                    // an existing child agent, and there is no circuit data
+                    if (aCircuit == null)
                     {
-                        m_log.WarnFormat("[LLUDPSERVER]: Rejecting UseCircuitCode for agent {0}, circuit {1}, endpoint {2}: circuit missing before AddClient", uccp.CircuitCode.ID, uccp.CircuitCode.Code, endPoint);
                         lock (m_pendingCache)
                             m_pendingCache.Remove(endPoint);
                         return;
@@ -1605,9 +1607,7 @@ namespace OpenSim.Region.ClientStack.LindenUDP
                     Queue<UDPPacketBuffer> queue = null;
                     lock (m_pendingCache)
                     {
-                        if (m_pendingCache.TryGetValue(endPoint, out queue))
-                            m_pendingCache.Remove(endPoint);
-                        else
+                         if (!m_pendingCache.Remove(endPoint, out queue))
                             m_log.Debug("[LLUDPSERVER]: HandleUseCircuitCode with no pending queue present");
                     }
 
